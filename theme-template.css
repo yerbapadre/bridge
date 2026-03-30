@@ -1,0 +1,173 @@
+/**
+ * Bridge Theme Template
+ *
+ * Copy this file and modify the RGB values to create a new color scheme.
+ * All values should be in RGB format without rgb() wrapper (e.g., "255 100 50")
+ *
+ * Apply your theme by updating these values in src/index.css :root {}
+ */
+
+:root {
+  /* ========================================
+     STATUS COLORS
+     Controls the colored bottom borders on task cards
+     ======================================== */
+
+  /* Blocked tasks - typically red/pink/orange (danger/alert) */
+  --color-status-blocked: 247 37 133;
+
+  /* Ready tasks - typically cyan/blue (available/cool) */
+  --color-status-ready: 0 255 255;
+
+  /* In Progress tasks - typically purple/yellow (active/working) */
+  --color-status-in-progress: 180 41 249;
+
+  /* Done tasks - typically green (success/complete) */
+  --color-status-done: 57 255 20;
+
+
+  /* ========================================
+     BACKGROUND COLORS
+     Controls the main app backgrounds
+     ======================================== */
+
+  /* Main app background (darkest) */
+  --color-bg-primary: 10 10 10;
+
+  /* Secondary background (used for main content area) */
+  --color-bg-secondary: 18 18 18;
+
+  /* Tertiary background (used for track containers - applied with opacity) */
+  --color-bg-tertiary: 45 45 45;
+
+  /* Quaternary background (used for borders and subtle elements) */
+  --color-bg-quaternary: 60 60 60;
+
+
+  /* ========================================
+     TEXT COLORS
+     Controls all text in the application
+     ======================================== */
+
+  /* Primary text - main headings and important text (brightest) */
+  --color-text-primary: 255 255 255;
+
+  /* Secondary text - regular body text */
+  --color-text-secondary: 200 200 200;
+
+  /* Tertiary text - subtle labels and hints */
+  --color-text-tertiary: 140 140 140;
+
+  /* Quaternary text - very subtle text */
+  --color-text-quaternary: 100 100 100;
+
+
+  /* ========================================
+     BORDER COLORS
+     Controls borders around elements
+     ======================================== */
+
+  /* Primary borders - main element borders */
+  --color-border-primary: 70 70 70;
+
+  /* Secondary borders - subtle separation */
+  --color-border-secondary: 55 55 55;
+
+
+  /* ========================================
+     ACCENT COLORS
+     Controls buttons, active states, and highlights
+     ======================================== */
+
+  /* Primary accent - main action buttons (e.g., "Add Track") */
+  --color-accent-primary: 0 217 255;
+
+  /* Accent hover state - button hover color */
+  --color-accent-hover: 0 180 216;
+
+  /* Star icon color - main track indicator */
+  --color-accent-star: 255 255 0;
+}
+
+
+/* ========================================
+   EXAMPLE ALTERNATIVE THEMES
+   ======================================== */
+
+/* DARK BLUE THEME
+:root {
+  --color-status-blocked: 239 68 68;
+  --color-status-ready: 96 165 250;
+  --color-status-in-progress: 251 191 36;
+  --color-status-done: 74 222 128;
+
+  --color-bg-primary: 3 7 18;
+  --color-bg-secondary: 15 23 42;
+  --color-bg-tertiary: 30 41 59;
+  --color-bg-quaternary: 51 65 85;
+
+  --color-text-primary: 248 250 252;
+  --color-text-secondary: 203 213 225;
+  --color-text-tertiary: 148 163 184;
+  --color-text-quaternary: 100 116 139;
+
+  --color-border-primary: 71 85 105;
+  --color-border-secondary: 51 65 85;
+
+  --color-accent-primary: 59 130 246;
+  --color-accent-hover: 37 99 235;
+  --color-accent-star: 251 191 36;
+}
+*/
+
+/* FOREST THEME
+:root {
+  --color-status-blocked: 239 68 68;
+  --color-status-ready: 52 211 153;
+  --color-status-in-progress: 253 224 71;
+  --color-status-done: 134 239 172;
+
+  --color-bg-primary: 6 10 6;
+  --color-bg-secondary: 20 29 20;
+  --color-bg-tertiary: 34 47 34;
+  --color-bg-quaternary: 52 64 52;
+
+  --color-text-primary: 236 253 245;
+  --color-text-secondary: 167 243 208;
+  --color-text-tertiary: 110 231 183;
+  --color-text-quaternary: 74 222 128;
+
+  --color-border-primary: 74 85 74;
+  --color-border-secondary: 52 64 52;
+
+  --color-accent-primary: 52 211 153;
+  --color-accent-hover: 34 197 94;
+  --color-accent-star: 253 224 71;
+}
+*/
+
+/* WARM SUNSET THEME
+:root {
+  --color-status-blocked: 220 38 38;
+  --color-status-ready: 251 146 60;
+  --color-status-in-progress: 245 158 11;
+  --color-status-done: 74 222 128;
+
+  --color-bg-primary: 15 10 5;
+  --color-bg-secondary: 28 16 8;
+  --color-bg-tertiary: 45 28 18;
+  --color-bg-quaternary: 60 40 28;
+
+  --color-text-primary: 254 243 199;
+  --color-text-secondary: 253 224 71;
+  --color-text-tertiary: 251 191 36;
+  --color-text-quaternary: 217 119 6;
+
+  --color-border-primary: 120 53 15;
+  --color-border-secondary: 92 38 8;
+
+  --color-accent-primary: 251 146 60;
+  --color-accent-hover: 249 115 22;
+  --color-accent-star: 251 191 36;
+}
+*/

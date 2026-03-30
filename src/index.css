@@ -2,6 +2,190 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Status Colors - RGB */
+  --color-status-blocked: 220 38 38;       /* Urgent Red */
+  --color-status-ready: 79 70 229;         /* Indigo Blue */
+  --color-status-in-progress: 20 158 158;  /* Bright Cyan/Teal */
+  --color-status-done: 28 133 31;          /* Forest Green */
+
+  /* Background Colors - RGB */
+  --color-bg-primary: 247 249 251;        /* Main Page (Off-White) */
+  --color-bg-secondary: 240 242 245;      /* Content Area (Light Gray) */
+  --color-bg-tertiary: 255 255 255;       /* Card/Track Surface (Pure White) */
+  --color-bg-quaternary: 226 232 240;     /* Elements/Empty States */
+
+  /* Text Colors - RGB */
+  --color-text-primary: 42 44 48;         /* Headings (Near Black) */
+  --color-text-secondary: 74 82 92;       /* Body (Dark Slate) */
+  --color-text-tertiary: 107 114 128;     /* Labels (Medium Gray) */
+  --color-text-quaternary: 156 163 175;   /* Disabled/Placeholder */
+
+  /* Border Colors - RGB */
+  --color-border-primary: 203 213 225;    /* Strong Dividers */
+  --color-border-secondary: 226 232 240;  /* Subtle Card Borders */
+
+  /* Accent Colors - RGB */
+  --color-accent-primary: 20 122 122;     /* Deep Teal (Primary Action) */
+  --color-accent-hover: 13 93 93;         /* Darker Teal for Hover */
+  --color-accent-star: 245 158 11;        /* Golden Amber for Main Track */
+
+  /* UI Element Colors - RGB */
+  --color-sidebar-bg: 23 23 27;           /* Sidebar Background */
+  --color-sidebar-border: 55 65 81;       /* Sidebar Borders */
+  --color-input-bg: 31 41 55;             /* Input Field Background */
+  --color-input-border: 75 85 99;         /* Input Field Border */
+  --color-button-secondary: 31 41 55;     /* Secondary Button Background */
+  --color-button-secondary-hover: 55 65 81; /* Secondary Button Hover */
+  --color-error-bg: 127 29 29;            /* Error Background */
+  --color-error-border: 239 68 68;        /* Error Border */
+  --color-success-bg: 240 253 244;        /* Success Background */
+  --color-success-border: 134 239 172;    /* Success Border */
+  --color-success-text: 21 128 61;        /* Success Text */
+  --color-task-card-border: 229 231 235;  /* Task Card Border (light gray) */
+}
+
 body {
-  @apply bg-neutral-900 text-neutral-100;
+  background-color: rgb(var(--color-bg-secondary));
+  color: rgb(var(--color-text-primary));
+}
+
+@layer utilities {
+  /* Status Border Colors with Neon Glow */
+  .border-status-blocked {
+    border-bottom-color: rgb(var(--color-status-blocked)) !important;
+    box-shadow: 0 2px 8px rgba(var(--color-status-blocked), 0.5);
+  }
+  .border-status-ready {
+    border-bottom-color: rgb(var(--color-status-ready)) !important;
+    box-shadow: 0 2px 8px rgba(var(--color-status-ready), 0.5);
+  }
+  .border-status-in-progress {
+    border-bottom-color: rgb(var(--color-status-in-progress)) !important;
+    box-shadow: 0 2px 8px rgba(var(--color-status-in-progress), 0.5);
+  }
+  .border-status-done {
+    border-bottom-color: rgb(var(--color-status-done)) !important;
+    box-shadow: 0 2px 8px rgba(var(--color-status-done), 0.5);
+  }
+
+  /* Status Background Colors */
+  .bg-status-done-muted {
+    background-color: rgba(var(--color-status-done), 0.2);
+  }
+  .text-status-done {
+    color: rgba(var(--color-status-done), 0.8);
+  }
+
+  /* Accent Button Colors with Glow */
+  .bg-accent {
+    background-color: rgb(var(--color-accent-primary));
+    box-shadow: 0 0 12px rgba(var(--color-accent-primary), 0.4);
+    color: rgb(var(--color-text-primary));
+  }
+  .bg-accent:hover {
+    background-color: rgb(var(--color-accent-hover));
+    box-shadow: 0 0 16px rgba(var(--color-accent-primary), 0.6);
+  }
+
+  /* Accent Text & Border Colors with Glow */
+  .text-accent {
+    color: rgb(var(--color-status-ready));
+    text-shadow: 0 0 8px rgba(var(--color-status-ready), 0.5);
+  }
+  .border-accent {
+    border-color: rgb(var(--color-status-ready));
+    box-shadow: 0 2px 8px rgba(var(--color-status-ready), 0.4);
+  }
+
+  /* Section Header Colors */
+  .text-header-in-progress {
+    color: rgb(var(--color-status-in-progress));
+  }
+  .text-header-ready {
+    color: rgb(var(--color-status-ready));
+  }
+
+  /* Special Colors */
+  .text-star {
+    color: rgb(var(--color-accent-star));
+    text-shadow: 0 0 10px rgba(var(--color-accent-star), 0.7);
+  }
+
+  /* Track/Column Colors */
+  .bg-track {
+    background-color: rgb(var(--color-bg-tertiary));
+    opacity: 0.95;
+  }
+  .border-track {
+    border-color: rgb(var(--color-border-secondary));
+  }
+
+  /* Task Card Colors */
+  .bg-task-card {
+    background-color: rgb(var(--color-bg-tertiary));
+  }
+  .border-task-card {
+    border-color: rgb(var(--color-task-card-border));
+  }
+
+  /* Sidebar Colors */
+  .bg-sidebar {
+    background-color: rgb(var(--color-sidebar-bg));
+  }
+  .border-sidebar {
+    border-color: rgb(var(--color-sidebar-border));
+  }
+
+  /* Input Colors */
+  .bg-input {
+    background-color: rgb(var(--color-input-bg));
+  }
+  .border-input {
+    border-color: rgb(var(--color-input-border));
+  }
+
+  /* Button Colors */
+  .bg-button-secondary {
+    background-color: rgb(var(--color-button-secondary));
+  }
+  .bg-button-secondary:hover {
+    background-color: rgb(var(--color-button-secondary-hover));
+  }
+
+  /* Error Colors */
+  .bg-error {
+    background-color: rgba(var(--color-error-bg), 0.5);
+  }
+  .border-error {
+    border-color: rgb(var(--color-error-border));
+  }
+  .text-error {
+    color: rgb(var(--color-error-border));
+  }
+
+  /* Success Colors */
+  .bg-success {
+    background-color: rgb(var(--color-success-bg));
+  }
+  .border-success {
+    border-color: rgb(var(--color-success-border));
+  }
+  .text-success {
+    color: rgb(var(--color-success-text));
+  }
+
+  /* Text Color Utilities */
+  .text-primary {
+    color: rgb(var(--color-text-primary));
+  }
+  .text-secondary {
+    color: rgb(var(--color-text-secondary));
+  }
+  .text-tertiary {
+    color: rgb(var(--color-text-tertiary));
+  }
+  .text-quaternary {
+    color: rgb(var(--color-text-quaternary));
+  }
 }
