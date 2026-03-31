@@ -126,7 +126,7 @@ body {
 
   /* Task Card Colors */
   .bg-task-card {
-    background-color: rgb(var(--color-bg-tertiary));
+    background-color: rgb(var(--color-task-card-bg));
   }
   .border-task-card {
     border-color: rgb(var(--color-task-card-border));

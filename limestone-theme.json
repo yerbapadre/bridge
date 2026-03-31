@@ -23,6 +23,7 @@
     "input_bg": "53 50 45",
     "input_border": "81 76 68",
     "button_secondary": "67 63 56",
-    "button_secondary_hover": "81 76 68"
+    "button_secondary_hover": "81 76 68",
+    "task_card_bg": "53 50 45"
   }
 }
