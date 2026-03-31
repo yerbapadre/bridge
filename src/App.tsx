@@ -6,6 +6,7 @@ import { formatTime } from "@/lib/theme";
 import type { GhosttyWindow, Task } from "@/types";
 import Sidebar from "@/components/Sidebar";
 import Clock from "@/components/Clock";
+import Modal from "@/components/Modal";
 import SettingsView from "@/views/SettingsView";
 import ActiveView from "@/views/ActiveView";
 import RetroView from "@/views/RetroView";
@@ -35,12 +36,14 @@ export default function App() {
   const reorderTracks = useTaskStore(state => state.reorderTracks);
   const createTask = useTaskStore(state => state.createTask);
   const updateTaskStatus = useTaskStore(state => state.updateTaskStatus);
+  const updateTaskDescription = useTaskStore(state => state.updateTaskDescription);
   const deleteTask = useTaskStore(state => state.deleteTask);
   const reorderTasks = useTaskStore(state => state.reorderTasks);
   const addDependency = useTaskStore(state => state.addDependency);
   const getTasksForTrack = useTaskStore(state => state.getTasksForTrack);
   const getSubtasks = useTaskStore(state => state.getSubtasks);
   const hasSubtasks = useTaskStore(state => state.hasSubtasks);
+  const isTrackComplete = useTaskStore(state => state.isTrackComplete);
   const advanceTaskStatus = useTaskStore(state => state.advanceTaskStatus);
   const loadTaskData = useTaskStore(state => state.loadData);
   const tasksError = useTaskStore(state => state.error);
@@ -49,6 +52,7 @@ export default function App() {
   const focusTask = useFocusStore(state => state.focusTask);
   const activeTimer = useFocusStore(state => state.activeTimer);
   const elapsedSeconds = useFocusStore(state => state.elapsedSeconds);
+  const totalTimeSeconds = useFocusStore(state => state.totalTimeSeconds);
   const switchFocusTask = useFocusStore(state => state.switchFocusTask);
   const stopCurrentTimer = useFocusStore(state => state.stopCurrentTimer);
   const resumeTimer = useFocusStore(state => state.resumeTimer);
@@ -118,6 +122,7 @@ export default function App() {
   const [showLinkTerminalModal, setShowLinkTerminalModal] = useState(false);
   const [showCreateTerminalModal, setShowCreateTerminalModal] = useState(false);
   const [createTerminalTaskId, setCreateTerminalTaskId] = useState<string | null>(null);
+  const [linkTerminalTaskId, setLinkTerminalTaskId] = useState<string | null>(null);
   const [newTerminalWorkingDir, setNewTerminalWorkingDir] = useState("");
   const [newTerminalInitialCmd, setNewTerminalInitialCmd] = useState("");
   const [saveAsProjectRoot, setSaveAsProjectRoot] = useState(false);
@@ -198,13 +203,26 @@ export default function App() {
 
   const handleOpenLinkTerminalModal = async () => {
     const success = await loadAvailableWindows();
-    if (success) setShowLinkTerminalModal(true);
+    if (success) {
+      setLinkTerminalTaskId(focusTask?.id || null);
+      setShowLinkTerminalModal(true);
+    }
+  };
+
+  const handleOpenLinkTerminalModalForTask = async (taskId: string) => {
+    const success = await loadAvailableWindows();
+    if (success) {
+      setLinkTerminalTaskId(taskId);
+      setShowLinkTerminalModal(true);
+    }
   };
 
   const handleLinkTerminalWindow = async (window: GhosttyWindow) => {
-    if (!focusTask) return;
-    await linkTerminalWindow(window, focusTask.id);
+    const taskId = linkTerminalTaskId || focusTask?.id;
+    if (!taskId) return;
+    await linkTerminalWindow(window, taskId);
     setShowLinkTerminalModal(false);
+    setLinkTerminalTaskId(null);
   };
 
   const handleOpenCreateTerminalModal = () => {
@@ -258,6 +276,9 @@ export default function App() {
   const wrappedUpdateTaskStatus = async (taskId: string, status: Task["status"]) => {
     if (!currentProjectId) return;
     await updateTaskStatus(taskId, status, currentProjectId);
+    // Reload focus task to reflect status change
+    const loadFocusAndTimer = useFocusStore.getState().loadFocusAndTimer;
+    await loadFocusAndTimer(currentProjectId);
   };
 
   const wrappedDeleteTask = async (taskId: string) => {
@@ -268,6 +289,14 @@ export default function App() {
   const wrappedAdvanceTaskStatus = async (taskId: string, currentStatus: Task["status"]) => {
     if (!currentProjectId) return;
     await advanceTaskStatus(taskId, currentStatus, currentProjectId);
+    // Reload focus task to reflect status change
+    const loadFocusAndTimer = useFocusStore.getState().loadFocusAndTimer;
+    await loadFocusAndTimer(currentProjectId);
+  };
+
+  const wrappedUpdateTaskDescription = async (taskId: string, description: string | null) => {
+    if (!currentProjectId) return;
+    await updateTaskDescription(taskId, description, currentProjectId);
   };
 
   const wrappedAddDependency = async (taskId: string, blocksTaskId: string) => {
@@ -302,7 +331,7 @@ export default function App() {
             <Clock />
             {focusTask && (
               <div className="text-sm text-tertiary mt-1">
-                Focus: {formatTime(elapsedSeconds)}
+                Focus: {formatTime(activeTimer ? elapsedSeconds : totalTimeSeconds)}
               </div>
             )}
           </div>
@@ -409,6 +438,7 @@ export default function App() {
             getTasksForTrack={getTasksForTrack}
             getSubtasks={getSubtasks}
             hasSubtasks={hasSubtasks}
+            isTrackComplete={isTrackComplete}
             onCreateTrack={handleCreateTrack}
             onDeleteTrack={handleDeleteTrack}
             onReorderTracks={handleReorderTracks}
@@ -418,6 +448,7 @@ export default function App() {
             onReorderTasks={handleReorderTasks}
             advanceTaskStatus={wrappedAdvanceTaskStatus}
             onOpenBlockModal={setBlockModalTaskId}
+            onOpenLinkTerminalModal={handleOpenLinkTerminalModalForTask}
           />
         ) : (
           <ActiveView
@@ -426,8 +457,10 @@ export default function App() {
             focusTask={focusTask}
             activeTimer={activeTimer}
             elapsedSeconds={elapsedSeconds}
+            totalTimeSeconds={totalTimeSeconds}
             formatTime={formatTime}
             onUpdateTaskStatus={wrappedUpdateTaskStatus}
+            onUpdateTaskDescription={wrappedUpdateTaskDescription}
             advanceTaskStatus={wrappedAdvanceTaskStatus}
             switchFocusTask={handleSwitchFocusTask}
             stopCurrentTimer={stopCurrentTimer}
@@ -452,256 +485,225 @@ export default function App() {
         />
       )}
 
-      {showLinkTerminalModal && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      <Modal isOpen={showLinkTerminalModal} onClose={() => setShowLinkTerminalModal(false)}>
+        <h3 className="text-lg font-bold text-primary mb-4">Link Ghostty Window</h3>
+
+        {availableWindows.length === 0 ? (
+          <div className="text-sm text-quaternary text-center py-6">
+            No Ghostty windows found.
+            <br />
+            Make sure Ghostty is running.
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {availableWindows.map((window) => (
+              <button
+                key={window.id}
+                onClick={() => handleLinkTerminalWindow(window)}
+                className="w-full text-left p-3 bg-secondary hover:bg-quaternary rounded border border-border-secondary hover:border-accent transition-colors"
+              >
+                <div className="text-sm font-medium text-primary">
+                  {window.title}
+                </div>
+                <div className="text-xs text-tertiary mt-1">
+                  ID: {window.id}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <button
           onClick={() => setShowLinkTerminalModal(false)}
+          className="mt-4 w-full px-4 py-2 bg-button-secondary hover:bg-button-secondary-hover text-secondary rounded"
         >
-          <div
-            className="bg-tertiary rounded-lg p-6 max-w-md w-full mx-4 border border-border-primary"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-bold text-primary mb-4">Link Ghostty Window</h3>
+          Cancel
+        </button>
+      </Modal>
 
-            {availableWindows.length === 0 ? (
-              <div className="text-sm text-quaternary text-center py-6">
-                No Ghostty windows found.
-                <br />
-                Make sure Ghostty is running.
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {availableWindows.map((window) => (
-                  <button
-                    key={window.id}
-                    onClick={() => handleLinkTerminalWindow(window)}
-                    className="w-full text-left p-3 bg-secondary hover:bg-quaternary rounded border border-border-secondary hover:border-accent transition-colors"
-                  >
-                    <div className="text-sm font-medium text-primary">
-                      {window.title}
-                    </div>
-                    <div className="text-xs text-tertiary mt-1">
-                      ID: {window.id}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
+      <Modal
+        isOpen={showCreateTerminalModal}
+        onClose={() => {
+          setShowCreateTerminalModal(false);
+          setNewTerminalWorkingDir("");
+          setNewTerminalInitialCmd("");
+          setCreateTerminalTaskId(null);
+        }}
+      >
+        <h3 className="text-lg font-bold text-primary mb-4">
+          Create New Terminal
+          {createTerminalTaskId && tasks.find(t => t.id === createTerminalTaskId) && (
+            <span className="text-sm font-normal text-secondary ml-2">
+              for {tasks.find(t => t.id === createTerminalTaskId)?.title}
+            </span>
+          )}
+        </h3>
 
-            <button
-              onClick={() => setShowLinkTerminalModal(false)}
-              className="mt-4 w-full px-4 py-2 bg-button-secondary hover:bg-button-secondary-hover text-secondary rounded"
-            >
-              Cancel
-            </button>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-secondary mb-1">
+              Working Directory (Optional)
+            </label>
+            <input
+              type="text"
+              value={newTerminalWorkingDir}
+              onChange={(e) => setNewTerminalWorkingDir(e.target.value)}
+              placeholder="/path/to/directory"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck="false"
+              className="w-full px-3 py-2 rounded bg-input-bg border border-input-border text-primary focus:outline-none focus:border-accent-primary"
+            />
+            <p className="text-xs text-tertiary mt-1">
+              Leave empty to use home directory
+            </p>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-secondary mb-2">
+              <input
+                type="checkbox"
+                checked={saveAsProjectRoot}
+                onChange={(e) => setSaveAsProjectRoot(e.target.checked)}
+                className="w-4 h-4 rounded border-input-border bg-input-bg text-accent-primary focus:ring-accent-primary"
+              />
+              Save as project root path
+            </label>
+            <p className="text-xs text-tertiary">
+              Use this directory as the default for new terminals in this project
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-secondary mb-1">
+              Initial Command (Optional)
+            </label>
+            <input
+              type="text"
+              value={newTerminalInitialCmd}
+              onChange={(e) => setNewTerminalInitialCmd(e.target.value)}
+              placeholder="npm run dev"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck="false"
+              className="w-full px-3 py-2 rounded bg-input-bg border border-input-border text-primary focus:outline-none focus:border-accent-primary"
+            />
+            <p className="text-xs text-tertiary mt-1">
+              Command to run when terminal opens
+            </p>
           </div>
         </div>
-      )}
 
-      {showCreateTerminalModal && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-          onClick={() => {
-            setShowCreateTerminalModal(false);
-            setNewTerminalWorkingDir("");
-            setNewTerminalInitialCmd("");
-            setCreateTerminalTaskId(null);
-          }}
-        >
-          <div
-            className="bg-tertiary rounded-lg p-6 max-w-md w-full mx-4 border border-border-primary"
-            onClick={(e) => e.stopPropagation()}
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={handleCreateTerminal}
+            className="flex-1 px-4 py-2 rounded bg-accent-primary hover:bg-accent-hover text-white font-medium"
           >
-            <h3 className="text-lg font-bold text-primary mb-4">
-              Create New Terminal
-              {createTerminalTaskId && tasks.find(t => t.id === createTerminalTaskId) && (
-                <span className="text-sm font-normal text-secondary ml-2">
-                  for {tasks.find(t => t.id === createTerminalTaskId)?.title}
-                </span>
-              )}
-            </h3>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  Working Directory (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={newTerminalWorkingDir}
-                  onChange={(e) => setNewTerminalWorkingDir(e.target.value)}
-                  placeholder="/path/to/directory"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck="false"
-                  className="w-full px-3 py-2 rounded bg-input-bg border border-input-border text-primary focus:outline-none focus:border-accent-primary"
-                />
-                <p className="text-xs text-tertiary mt-1">
-                  Leave empty to use home directory
-                </p>
-              </div>
-
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-secondary mb-2">
-                  <input
-                    type="checkbox"
-                    checked={saveAsProjectRoot}
-                    onChange={(e) => setSaveAsProjectRoot(e.target.checked)}
-                    className="w-4 h-4 rounded border-input-border bg-input-bg text-accent-primary focus:ring-accent-primary"
-                  />
-                  Save as project root path
-                </label>
-                <p className="text-xs text-tertiary">
-                  Use this directory as the default for new terminals in this project
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-secondary mb-1">
-                  Initial Command (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={newTerminalInitialCmd}
-                  onChange={(e) => setNewTerminalInitialCmd(e.target.value)}
-                  placeholder="npm run dev"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck="false"
-                  className="w-full px-3 py-2 rounded bg-input-bg border border-input-border text-primary focus:outline-none focus:border-accent-primary"
-                />
-                <p className="text-xs text-tertiary mt-1">
-                  Command to run when terminal opens
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={handleCreateTerminal}
-                className="flex-1 px-4 py-2 rounded bg-accent-primary hover:bg-accent-hover text-white font-medium"
-              >
-                Create & Link
-              </button>
-              <button
-                onClick={() => {
-                  setShowCreateTerminalModal(false);
-                  setNewTerminalWorkingDir("");
-                  setNewTerminalInitialCmd("");
-                  setCreateTerminalTaskId(null);
-                }}
-                className="px-4 py-2 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {deleteConfirmProjectId && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-          onClick={() => {
-            setDeleteConfirmProjectId(null);
-            setDeleteConfirmTaskCount(0);
-          }}
-        >
-          <div
-            className="bg-secondary rounded-lg shadow-lg p-6 max-w-md w-full mx-4"
-            onClick={(e) => e.stopPropagation()}
+            Create & Link
+          </button>
+          <button
+            onClick={() => {
+              setShowCreateTerminalModal(false);
+              setNewTerminalWorkingDir("");
+              setNewTerminalInitialCmd("");
+              setCreateTerminalTaskId(null);
+            }}
+            className="px-4 py-2 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary"
           >
-            <h2 className="text-xl font-semibold mb-4 text-primary">Delete Project</h2>
-
-            {deleteConfirmTaskCount > 0 ? (
-              <div>
-                <p className="text-secondary mb-4">
-                  This project contains <strong>{deleteConfirmTaskCount}</strong> task{deleteConfirmTaskCount !== 1 ? 's' : ''}.
-                  All tasks and tracks will be permanently deleted.
-                </p>
-                <p className="text-error text-sm mb-6">
-                  This action cannot be undone.
-                </p>
-              </div>
-            ) : (
-              <p className="text-secondary mb-6">
-                Are you sure you want to delete this project?
-              </p>
-            )}
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setDeleteConfirmProjectId(null);
-                  setDeleteConfirmTaskCount(0);
-                }}
-                className="px-4 py-2 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDeleteProject}
-                className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-medium"
-              >
-                Delete Project
-              </button>
-            </div>
-          </div>
+            Cancel
+          </button>
         </div>
-      )}
+      </Modal>
 
-      {deleteConfirmTrackId && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-          onClick={() => {
-            setDeleteConfirmTrackId(null);
-            setDeleteConfirmTrackTaskCount(0);
-          }}
-        >
-          <div
-            className="bg-secondary rounded-lg shadow-lg p-6 max-w-md w-full mx-4"
-            onClick={(e) => e.stopPropagation()}
+      <Modal
+        isOpen={!!deleteConfirmProjectId}
+        onClose={() => {
+          setDeleteConfirmProjectId(null);
+          setDeleteConfirmTaskCount(0);
+        }}
+      >
+        <h2 className="text-xl font-semibold mb-4 text-primary">Delete Project</h2>
+
+        {deleteConfirmTaskCount > 0 ? (
+          <div>
+            <p className="text-secondary mb-4">
+              This project contains <strong>{deleteConfirmTaskCount}</strong> task{deleteConfirmTaskCount !== 1 ? 's' : ''}.
+              All tasks and tracks will be permanently deleted.
+            </p>
+            <p className="text-error text-sm mb-6">
+              This action cannot be undone.
+            </p>
+          </div>
+        ) : (
+          <p className="text-secondary mb-6">
+            Are you sure you want to delete this project?
+          </p>
+        )}
+
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={() => {
+              setDeleteConfirmProjectId(null);
+              setDeleteConfirmTaskCount(0);
+            }}
+            className="px-4 py-2 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary"
           >
-            <h2 className="text-xl font-semibold mb-4 text-primary">Delete Track</h2>
-
-            {deleteConfirmTrackTaskCount > 0 ? (
-              <div>
-                <p className="text-secondary mb-4">
-                  This track contains <strong>{deleteConfirmTrackTaskCount}</strong> task{deleteConfirmTrackTaskCount !== 1 ? 's' : ''}.
-                  All tasks will be permanently deleted.
-                </p>
-                <p className="text-error text-sm mb-6">
-                  This action cannot be undone.
-                </p>
-              </div>
-            ) : (
-              <p className="text-secondary mb-6">
-                Are you sure you want to delete this track?
-              </p>
-            )}
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setDeleteConfirmTrackId(null);
-                  setDeleteConfirmTrackTaskCount(0);
-                }}
-                className="px-4 py-2 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDeleteTrack}
-                className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-medium"
-              >
-                Delete Track
-              </button>
-            </div>
-          </div>
+            Cancel
+          </button>
+          <button
+            onClick={confirmDeleteProject}
+            className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-medium"
+          >
+            Delete Project
+          </button>
         </div>
-      )}
+      </Modal>
+
+      <Modal
+        isOpen={!!deleteConfirmTrackId}
+        onClose={() => {
+          setDeleteConfirmTrackId(null);
+          setDeleteConfirmTrackTaskCount(0);
+        }}
+      >
+        <h2 className="text-xl font-semibold mb-4 text-primary">Delete Track</h2>
+
+        {deleteConfirmTrackTaskCount > 0 ? (
+          <div>
+            <p className="text-secondary mb-4">
+              This track contains <strong>{deleteConfirmTrackTaskCount}</strong> task{deleteConfirmTrackTaskCount !== 1 ? 's' : ''}.
+              All tasks will be permanently deleted.
+            </p>
+            <p className="text-error text-sm mb-6">
+              This action cannot be undone.
+            </p>
+          </div>
+        ) : (
+          <p className="text-secondary mb-6">
+            Are you sure you want to delete this track?
+          </p>
+        )}
+
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={() => {
+              setDeleteConfirmTrackId(null);
+              setDeleteConfirmTrackTaskCount(0);
+            }}
+            className="px-4 py-2 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={confirmDeleteTrack}
+            className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-medium"
+          >
+            Delete Track
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

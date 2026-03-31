@@ -1,4 +1,5 @@
 import TaskCard from "./TaskCard";
+import { Star, X } from "lucide-react";
 
 interface Task {
   id: string;
@@ -46,6 +47,7 @@ interface TrackColumnProps {
   newTaskTitle: string;
   setNewTaskTitle: (title: string) => void;
   onOpenBlockModal: (taskId: string) => void;
+  onOpenLinkTerminalModal: (taskId: string) => void;
 
   // Track drag handlers
   onTrackDragStart?: (trackId: string, trackType: string) => void;
@@ -86,6 +88,7 @@ export default function TrackColumn({
   newTaskTitle,
   setNewTaskTitle,
   onOpenBlockModal,
+  onOpenLinkTerminalModal,
   onTrackDragStart,
   onTrackDragOver,
   onTrackDragLeave,
@@ -153,7 +156,7 @@ export default function TrackColumn({
       <div className="p-4 border-b border-sidebar flex items-center justify-between">
         <div>
           <h2 className="font-semibold flex items-center gap-2 text-primary">
-            {isMainTrack && <span className="text-star">★</span>}
+            {isMainTrack && <Star size={16} className="text-star fill-star" />}
             {track.name}
           </h2>
           <p className="text-xs text-tertiary mt-0.5">
@@ -169,11 +172,11 @@ export default function TrackColumn({
             onMouseDown={(e) => {
               e.stopPropagation();
             }}
-            className="text-tertiary hover:text-error text-sm pointer-events-auto z-10 relative"
+            className="text-tertiary hover:text-error pointer-events-auto z-10 relative"
             title="Delete track"
             draggable="false"
           >
-            ×
+            <X size={16} />
           </button>
         )}
       </div>
@@ -199,6 +202,7 @@ export default function TrackColumn({
             onDeleteTask={onDeleteTask}
             advanceTaskStatus={advanceTaskStatus}
             onOpenBlockModal={onOpenBlockModal}
+            onOpenLinkTerminalModal={onOpenLinkTerminalModal}
             getSubtasks={getSubtasks}
             selectedParentTaskId={selectedParentTaskId}
             setSelectedParentTaskId={setSelectedParentTaskId}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Task, Track } from "@/types";
+import { Check, Star } from "lucide-react";
 
 interface RetroViewProps {
   tasks: Task[];
@@ -267,7 +268,7 @@ function RetroView({ tasks, tracks }: RetroViewProps) {
                     key={task.id}
                     className="flex items-start gap-3 p-3 bg-secondary rounded hover:bg-button-secondary transition-colors"
                   >
-                    <span className="text-accent text-lg mt-0.5">✓</span>
+                    <Check size={20} className="text-accent mt-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-primary">{task.title}</div>
                       <div className="text-xs text-tertiary mt-1">
@@ -293,7 +294,7 @@ function RetroView({ tasks, tracks }: RetroViewProps) {
                         className="flex items-center justify-between p-3 bg-secondary rounded"
                       >
                         <div className="flex items-center gap-2">
-                          {track.type === "main" && <span className="text-star">★</span>}
+                          {track.type === "main" && <Star size={16} className="text-star fill-star" />}
                           <span className="font-medium text-primary">{track.name}</span>
                         </div>
                         <span className="text-sm text-tertiary">{trackTasks.length} tasks</span>
@@ -392,7 +393,7 @@ function RetroView({ tasks, tracks }: RetroViewProps) {
                     key={task.id}
                     className="flex items-start gap-3 p-3 bg-secondary rounded hover:bg-button-secondary transition-colors"
                   >
-                    <span className="text-accent text-lg mt-0.5">✓</span>
+                    <Check size={20} className="text-accent mt-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-primary">{task.title}</div>
                       <div className="text-xs text-tertiary mt-1">

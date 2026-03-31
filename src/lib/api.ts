@@ -91,7 +91,7 @@ export async function createTask(input: {
 
 export async function updateTask(
   id: string,
-  input: { status: Task["status"] }
+  input: { status?: Task["status"]; title?: string; description?: string | null }
 ): Promise<void> {
   return invoke("update_task", { id, input });
 }
@@ -144,6 +144,10 @@ export async function startTimer(taskId: string): Promise<ActiveTimer> {
 
 export async function stopTimer(taskId: string): Promise<void> {
   return invoke("stop_timer", { taskId });
+}
+
+export async function getTotalTimeForTask(taskId: string): Promise<number> {
+  return invoke<number>("get_total_time_for_task", { taskId });
 }
 
 // Terminal Sessions

@@ -7,11 +7,11 @@ export default function TerminalTyping() {
   const [isHovered, setIsHovered] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const fullText = 'brew install @yeticat/bridge'
+  const fullText = 'brew tap yerbapadre/bridge && brew install --cask bridge'
 
   const handleClick = async () => {
     try {
-      await navigator.clipboard.writeText(fullText)
+      await navigator.clipboard.writeText('brew tap yerbapadre/bridge\nbrew install --cask bridge')
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {

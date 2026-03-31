@@ -6,6 +6,7 @@ interface FocusStore {
   focusTask: Task | null;
   activeTimer: ActiveTimer | null;
   elapsedSeconds: number;
+  totalTimeSeconds: number;
   timerInterval: number | null;
   error: string | null;
   loadFocusAndTimer: (projectId: string) => Promise<void>;
@@ -20,6 +21,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
   focusTask: null,
   activeTimer: null,
   elapsedSeconds: 0,
+  totalTimeSeconds: 0,
   timerInterval: null,
   error: null,
 
@@ -41,8 +43,12 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
 
       if (focusTaskData) {
         updates.focusTask = focusTaskData;
+        // Load total time for the task
+        const totalTime = await api.getTotalTimeForTask(focusTaskData.id);
+        updates.totalTimeSeconds = totalTime;
       } else {
         updates.focusTask = null;
+        updates.totalTimeSeconds = 0;
       }
 
       if (activeTimerData) {
@@ -55,6 +61,11 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
         }, 1000);
 
         updates.timerInterval = id;
+      } else {
+        // No active timer - reset elapsed time and ensure interval is cleared
+        updates.activeTimer = null;
+        updates.elapsedSeconds = 0;
+        updates.timerInterval = null;
       }
 
       set(updates);

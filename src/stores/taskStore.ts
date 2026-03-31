@@ -13,12 +13,14 @@ interface TaskStore {
   reorderTracks: (trackId: string, newPosition: number, currentProjectId: string) => Promise<boolean>;
   createTask: (trackId: string, title: string, parentTaskId: string | null, currentProjectId: string) => Promise<boolean>;
   updateTaskStatus: (taskId: string, newStatus: Task["status"], currentProjectId: string) => Promise<void>;
+  updateTaskDescription: (taskId: string, description: string | null, currentProjectId: string) => Promise<void>;
   deleteTask: (taskId: string, currentProjectId: string) => Promise<void>;
   reorderTasks: (taskId: string, newPosition: number, currentProjectId: string) => Promise<boolean>;
   addDependency: (taskId: string, blocksTaskId: string, currentProjectId: string) => Promise<void>;
   getTasksForTrack: (trackId: string) => Task[];
   getSubtasks: (parentId: string) => Task[];
   hasSubtasks: (taskId: string) => boolean;
+  isTrackComplete: (trackId: string) => boolean;
   advanceTaskStatus: (taskId: string, currentStatus: Task["status"], currentProjectId: string) => Promise<void>;
   setError: (error: string | null) => void;
 }
@@ -149,6 +151,15 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     }
   },
 
+  updateTaskDescription: async (taskId: string, description: string | null, currentProjectId: string) => {
+    try {
+      await api.updateTask(taskId, { description });
+      await get().loadData(currentProjectId);
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
   deleteTask: async (taskId: string, currentProjectId: string) => {
     try {
       await api.deleteTask(taskId);
@@ -196,6 +207,26 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   hasSubtasks: (taskId: string) => {
     const { tasks } = get();
     return tasks.some((t) => t.parent_task_id === taskId);
+  },
+
+  isTrackComplete: (trackId: string) => {
+    const { tasks } = get();
+
+    const trackTasks = tasks.filter(t => t.track_id === trackId && t.parent_task_id === null);
+
+    if (trackTasks.length === 0) return false;
+
+    const isTaskTreeComplete = (taskId: string): boolean => {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task || task.status !== "done") return false;
+
+      const subtasks = tasks.filter(t => t.parent_task_id === taskId);
+      if (subtasks.length === 0) return true;
+
+      return subtasks.every(st => isTaskTreeComplete(st.id));
+    };
+
+    return trackTasks.every(task => isTaskTreeComplete(task.id));
   },
 
   advanceTaskStatus: async (taskId: string, currentStatus: Task["status"], currentProjectId: string) => {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ChevronRight, ChevronDown, Check, ArrowRight, Ban, Terminal, Plus, MoreVertical } from "lucide-react";
 
 interface Task {
   id: string;
@@ -35,6 +35,7 @@ interface TaskCardProps {
   onDeleteTask: (taskId: string) => void;
   advanceTaskStatus: (taskId: string, currentStatus: Task["status"]) => void;
   onOpenBlockModal: (taskId: string) => void;
+  onOpenLinkTerminalModal: (taskId: string) => void;
   getSubtasks: (parentId: string) => Task[];
   selectedParentTaskId: string | null;
   setSelectedParentTaskId: (id: string | null) => void;
@@ -61,6 +62,7 @@ export default function TaskCard({
   onDeleteTask,
   advanceTaskStatus,
   onOpenBlockModal,
+  onOpenLinkTerminalModal,
   getSubtasks,
   selectedParentTaskId,
   setSelectedParentTaskId,
@@ -159,17 +161,12 @@ export default function TaskCard({
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="flex items-start gap-2 flex-1">
               {hasSubtasks(currentTask.id) && (
-                <Tooltip>
-                  <TooltipTrigger
-                    onClick={() => toggleTaskCollapsed(currentTask.id)}
-                    className="text-tertiary hover:text-secondary text-sm mt-0.5"
-                  >
-                    {isCollapsed ? "▶" : "▼"}
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{isCollapsed ? "Show subtasks" : "Hide subtasks"}</p>
-                  </TooltipContent>
-                </Tooltip>
+                <button
+                  onClick={() => toggleTaskCollapsed(currentTask.id)}
+                  className="text-tertiary hover:text-secondary mt-0.5"
+                >
+                  {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                </button>
               )}
               <div className="flex-1">
                 <p className="text-sm font-medium leading-snug text-primary select-text">{currentTask.title}</p>
@@ -198,11 +195,11 @@ export default function TaskCard({
                     setOpenMenuTaskId(currentTask.id);
                   }
                 }}
-                className="text-tertiary hover:text-secondary text-sm transition-opacity"
+                className="text-tertiary hover:text-secondary transition-opacity"
                 title="More options"
                 draggable="false"
               >
-                ⋯
+                <MoreVertical size={16} />
               </button>
             </div>
           </div>
@@ -215,7 +212,7 @@ export default function TaskCard({
                 title="Advance to next status"
                 draggable="false"
               >
-                →
+                <ArrowRight size={14} />
               </button>
             ) : (
               <button
@@ -224,7 +221,7 @@ export default function TaskCard({
                 title="Completed"
                 draggable="false"
               >
-                ✓
+                <Check size={14} />
               </button>
             )}
             {currentTask.status !== "done" && (
@@ -234,17 +231,26 @@ export default function TaskCard({
                 title="Add blocking task"
                 draggable="false"
               >
-                ⊘
+                <Ban size={14} />
               </button>
             )}
+            <button
+              onClick={() => onOpenLinkTerminalModal(currentTask.id)}
+              className="text-xs px-2 py-1 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary"
+              title="Link terminal"
+              draggable="false"
+            >
+              <Terminal size={14} />
+            </button>
             {canHaveSubtasks && (
               <button
                 onClick={() => setSelectedParentTaskId(currentTask.id)}
-                className="text-xs px-3 py-1 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary"
+                className="text-xs px-2 py-1 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary flex items-center gap-1"
                 title="Add subtask"
                 draggable="false"
               >
-                + Add Subtask
+                <Plus size={14} />
+                <span>Add Subtask</span>
               </button>
             )}
           </div>

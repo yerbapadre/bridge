@@ -488,6 +488,34 @@ impl Database {
                     button_secondary_hover: "60 40 100".to_string(),
                 },
             ),
+            (
+                "Limestone",
+                ColorPreferences {
+                    status_blocked: "217 119 119".to_string(),
+                    status_ready: "139 172 204".to_string(),
+                    status_in_progress: "218 165 32".to_string(),
+                    status_done: "120 190 100".to_string(),
+                    bg_primary: "40 38 35".to_string(),
+                    bg_secondary: "53 50 45".to_string(),
+                    bg_tertiary: "67 63 56".to_string(),
+                    bg_quaternary: "81 76 68".to_string(),
+                    text_primary: "235 230 220".to_string(),
+                    text_secondary: "204 197 183".to_string(),
+                    text_tertiary: "168 161 148".to_string(),
+                    text_quaternary: "133 127 116".to_string(),
+                    border_primary: "67 63 56".to_string(),
+                    border_secondary: "81 76 68".to_string(),
+                    accent_primary: "176 151 118".to_string(),
+                    accent_hover: "158 133 100".to_string(),
+                    accent_star: "227 188 122".to_string(),
+                    sidebar_bg: "40 38 35".to_string(),
+                    sidebar_border: "67 63 56".to_string(),
+                    input_bg: "53 50 45".to_string(),
+                    input_border: "81 76 68".to_string(),
+                    button_secondary: "67 63 56".to_string(),
+                    button_secondary_hover: "81 76 68".to_string(),
+                },
+            ),
         ];
 
         let conn = self.conn.lock().unwrap();
@@ -805,6 +833,7 @@ impl Database {
 
         let title = input.title.unwrap_or(current_task.title);
         let description = input.description.or(current_task.description);
+        let old_status = current_task.status.clone();
         let status = input.status.unwrap_or(current_task.status);
         let completed_at = if status == "done" {
             Some(now)
@@ -817,6 +846,14 @@ impl Database {
              WHERE id = ?6",
             params![title, description, status, now, completed_at, id],
         )?;
+
+        // Stop timer if task is being marked as done
+        if status == "done" && old_status != "done" {
+            drop(conn); // Release lock before calling stop_timer
+            let _ = self.stop_timer(id); // Ignore error if timer wasn't running
+            let conn = self.conn.lock().unwrap();
+            drop(conn); // Just to maintain consistency
+        }
 
         Ok(Task {
             id: id.to_string(),
@@ -952,8 +989,8 @@ impl Database {
             let has_incomplete_deps: bool = conn.query_row(
                 "SELECT EXISTS(
                     SELECT 1 FROM task_dependencies td
-                    JOIN tasks t ON td.blocks_task_id = t.id
-                    WHERE td.task_id = ?1 AND t.status != 'done'
+                    JOIN tasks t ON td.task_id = t.id
+                    WHERE td.blocks_task_id = ?1 AND t.status != 'done'
                 )",
                 params![task_id],
                 |row| row.get(0),
@@ -1377,6 +1414,13 @@ impl Database {
         conn.execute(
             "UPDATE projects SET focused_task_id = ?1, updated_at = ?2 WHERE id = ?3",
             params![task_id, now, project_id],
+        )?;
+
+        // If the task is ready or blocked, set it to in_progress
+        conn.execute(
+            "UPDATE tasks SET status = 'in_progress', updated_at = ?1
+             WHERE id = ?2 AND status IN ('ready', 'blocked')",
+            params![now, task_id],
         )?;
 
         // Get and return the task

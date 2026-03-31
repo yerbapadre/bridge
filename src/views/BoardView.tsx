@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Filter } from "lucide-react";
 import type { Track, Task } from "@/types";
 import { getStatusBorderColor } from "@/lib/theme";
 import TrackColumn from "@/views/board/TrackColumn";
@@ -11,6 +12,7 @@ interface BoardViewProps {
   getTasksForTrack: (trackId: string) => Task[];
   getSubtasks: (parentId: string) => Task[];
   hasSubtasks: (taskId: string) => boolean;
+  isTrackComplete: (trackId: string) => boolean;
   onCreateTrack: (name: string) => Promise<void>;
   onDeleteTrack: (id: string) => Promise<void>;
   onReorderTracks: (trackId: string, newPosition: number) => Promise<void>;
@@ -20,6 +22,7 @@ interface BoardViewProps {
   onReorderTasks: (taskId: string, newPosition: number) => Promise<void>;
   advanceTaskStatus: (taskId: string, currentStatus: Task["status"]) => Promise<void>;
   onOpenBlockModal: (taskId: string) => void;
+  onOpenLinkTerminalModal: (taskId: string) => void;
 }
 
 export default function BoardView({
@@ -30,6 +33,7 @@ export default function BoardView({
   getTasksForTrack,
   getSubtasks,
   hasSubtasks,
+  isTrackComplete,
   onCreateTrack,
   onDeleteTrack,
   onReorderTracks,
@@ -39,6 +43,7 @@ export default function BoardView({
   onReorderTasks,
   advanceTaskStatus,
   onOpenBlockModal,
+  onOpenLinkTerminalModal,
 }: BoardViewProps) {
   const [newTrackName, setNewTrackName] = useState("");
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -49,6 +54,7 @@ export default function BoardView({
   const [dragOverTrackId, setDragOverTrackId] = useState<string | null>(null);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const handleCreateTrack = async () => {
     if (!newTrackName.trim()) return;
@@ -140,6 +146,26 @@ export default function BoardView({
     setDragOverTaskId(null);
   };
 
+  const filteredMainTrack = mainTrack && (showCompleted || !isTrackComplete(mainTrack.id))
+    ? mainTrack
+    : undefined;
+
+  const filteredSideTracks = showCompleted
+    ? sideTracks
+    : sideTracks.filter(track => !isTrackComplete(track.id));
+
+  const completedTrackCount = tracks.filter(track => isTrackComplete(track.id)).length;
+
+  const getFilteredTasksForTrack = (trackId: string) => {
+    const trackTasks = getTasksForTrack(trackId);
+    return showCompleted ? trackTasks : trackTasks.filter(t => t.status !== "done");
+  };
+
+  const getFilteredSubtasks = (parentId: string) => {
+    const subtasks = getSubtasks(parentId);
+    return showCompleted ? subtasks : subtasks.filter(t => t.status !== "done");
+  };
+
   return (
     <>
       {tracks.length < 8 && (
@@ -161,18 +187,40 @@ export default function BoardView({
         </div>
       )}
 
+      {tracks.length > 0 && (
+        <div className="mb-6 flex gap-2">
+          <button
+            onClick={() => setShowCompleted(!showCompleted)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm border transition-colors ${
+              showCompleted
+                ? "bg-accent/10 border-accent/30 text-accent-primary"
+                : "bg-button-secondary border-sidebar text-tertiary hover:bg-button-secondary-hover hover:text-secondary"
+            }`}
+          >
+            <Filter size={14} />
+            <span>Show completed</span>
+            {!showCompleted && completedTrackCount > 0 && (
+              <>
+                <span className="text-tertiary">·</span>
+                <span className="font-medium">{completedTrackCount}</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
       <div className="flex gap-4 overflow-x-auto pb-4 flex-1">
-        {mainTrack && (
+        {filteredMainTrack && (
           <TrackColumn
-            track={mainTrack}
-            tasks={getTasksForTrack(mainTrack.id)}
+            track={filteredMainTrack}
+            tasks={getFilteredTasksForTrack(filteredMainTrack.id)}
             onDeleteTrack={onDeleteTrack}
             onCreateTask={handleCreateTask}
             onUpdateTaskStatus={onUpdateTaskStatus}
             onDeleteTask={onDeleteTask}
             advanceTaskStatus={advanceTaskStatus}
             getStatusBorderColor={getStatusBorderColor}
-            getSubtasks={getSubtasks}
+            getSubtasks={getFilteredSubtasks}
             hasSubtasks={hasSubtasks}
             collapsedTasks={collapsedTasks}
             toggleTaskCollapsed={toggleTaskCollapsed}
@@ -183,13 +231,14 @@ export default function BoardView({
             newTaskTitle={newTaskTitle}
             setNewTaskTitle={setNewTaskTitle}
             onOpenBlockModal={onOpenBlockModal}
+            onOpenLinkTerminalModal={onOpenLinkTerminalModal}
             onTrackDragStart={handleTrackDragStart}
             onTrackDragOver={handleTrackDragOver}
             onTrackDragLeave={handleTrackDragLeave}
             onTrackDrop={handleTrackDrop}
             onTrackDragEnd={handleTrackDragEnd}
-            isDragging={draggedTrackId === mainTrack.id}
-            isDragOver={dragOverTrackId === mainTrack.id}
+            isDragging={draggedTrackId === filteredMainTrack.id}
+            isDragOver={dragOverTrackId === filteredMainTrack.id}
             onTaskDragStart={handleTaskDragStart}
             onTaskDragOver={handleTaskDragOver}
             onTaskDragLeave={handleTaskDragLeave}
@@ -200,18 +249,18 @@ export default function BoardView({
           />
         )}
 
-        {sideTracks.map((track) => (
+        {filteredSideTracks.map((track) => (
           <TrackColumn
             key={track.id}
             track={track}
-            tasks={getTasksForTrack(track.id)}
+            tasks={getFilteredTasksForTrack(track.id)}
             onDeleteTrack={onDeleteTrack}
             onCreateTask={handleCreateTask}
             onUpdateTaskStatus={onUpdateTaskStatus}
             onDeleteTask={onDeleteTask}
             advanceTaskStatus={advanceTaskStatus}
             getStatusBorderColor={getStatusBorderColor}
-            getSubtasks={getSubtasks}
+            getSubtasks={getFilteredSubtasks}
             hasSubtasks={hasSubtasks}
             collapsedTasks={collapsedTasks}
             toggleTaskCollapsed={toggleTaskCollapsed}
@@ -222,6 +271,7 @@ export default function BoardView({
             newTaskTitle={newTaskTitle}
             setNewTaskTitle={setNewTaskTitle}
             onOpenBlockModal={onOpenBlockModal}
+            onOpenLinkTerminalModal={onOpenLinkTerminalModal}
             onTrackDragStart={handleTrackDragStart}
             onTrackDragOver={handleTrackDragOver}
             onTrackDragLeave={handleTrackDragLeave}

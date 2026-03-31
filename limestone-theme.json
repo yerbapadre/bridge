@@ -3,8 +3,8 @@
   "colors": {
     "status_blocked": "217 119 119",
     "status_ready": "139 172 204",
-    "status_in_progress": "162 194 151",
-    "status_done": "156 156 156",
+    "status_in_progress": "218 165 32",
+    "status_done": "120 190 100",
     "bg_primary": "40 38 35",
     "bg_secondary": "53 50 45",
     "bg_tertiary": "67 63 56",

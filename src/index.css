@@ -188,6 +188,9 @@ body {
   .bg-tertiary {
     background-color: rgb(var(--color-bg-tertiary));
   }
+  .bg-quaternary {
+    background-color: rgb(var(--color-bg-quaternary));
+  }
 
   /* Text Color Utilities */
   .text-primary {
