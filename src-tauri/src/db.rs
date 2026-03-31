@@ -427,7 +427,7 @@ impl Database {
                 "Cyberpunk",
                 ColorPreferences {
                     status_blocked: "255 20 147".to_string(),
-                    status_ready: "0 255 255".to_string(),
+                    status_ready: "255 100 255".to_string(),
                     status_in_progress: "138 43 226".to_string(),
                     status_done: "57 255 20".to_string(),
                     bg_primary: "10 10 15".to_string(),
@@ -440,8 +440,8 @@ impl Database {
                     text_quaternary: "100 110 140".to_string(),
                     border_primary: "50 60 100".to_string(),
                     border_secondary: "35 40 70".to_string(),
-                    accent_primary: "0 255 255".to_string(),
-                    accent_hover: "255 0 200".to_string(),
+                    accent_primary: "255 0 200".to_string(),
+                    accent_hover: "220 0 160".to_string(),
                     accent_star: "255 255 0".to_string(),
                     sidebar_bg: "12 12 20".to_string(),
                     sidebar_border: "40 50 90".to_string(),
@@ -467,8 +467,17 @@ impl Database {
                     },
                 )?;
 
-            // Only insert if it doesn't exist
-            if !exists {
+            if exists {
+                // Update existing preset theme to ensure latest colors
+                let colors_json = serde_json::to_string(&colors)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+
+                conn.execute(
+                    "UPDATE themes SET colors = ?1 WHERE name = ?2",
+                    params![colors_json, name],
+                )?;
+            } else {
+                // Insert new preset theme
                 let id = uuid::Uuid::new_v4().to_string();
                 let now = chrono::Utc::now().timestamp();
                 let colors_json = serde_json::to_string(&colors)

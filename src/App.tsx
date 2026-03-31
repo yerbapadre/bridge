@@ -825,13 +825,11 @@ export default function App() {
         <div className={`p-4 border-b border-sidebar flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
           {!sidebarCollapsed && <h2 className="font-bold text-lg text-primary">Bridge</h2>}
           <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                className={`text-tertiary hover:text-secondary transition-colors ${sidebarCollapsed ? 'text-xl' : 'text-sm'}`}
-              >
-                {sidebarCollapsed ? "→" : "←"}
-              </button>
+            <TooltipTrigger
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className={`text-tertiary hover:text-secondary transition-colors ${sidebarCollapsed ? 'text-xl' : 'text-sm'}`}
+            >
+              {sidebarCollapsed ? "→" : "←"}
             </TooltipTrigger>
             <TooltipContent>
               <p>{sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}</p>
@@ -1063,32 +1061,28 @@ export default function App() {
             <p className="text-sm text-primary flex-1">Error: {error}</p>
             <div className="flex gap-2 flex-shrink-0">
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(error);
-                    }}
-                    className="text-primary hover:opacity-70 transition-opacity"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  </button>
+                <TooltipTrigger
+                  onClick={() => {
+                    navigator.clipboard.writeText(error);
+                  }}
+                  className="text-primary hover:opacity-70 transition-opacity"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Copy error message</p>
                 </TooltipContent>
               </Tooltip>
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setError(null)}
-                    className="text-primary hover:opacity-70 transition-opacity"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                <TooltipTrigger
+                  onClick={() => setError(null)}
+                  className="text-primary hover:opacity-70 transition-opacity"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Dismiss error</p>
@@ -3018,14 +3012,11 @@ function TrackColumn({
             <div className="flex items-start gap-2 flex-1">
               {hasSubtasks(task.id) && (
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => toggleTaskCollapsed(task.id)}
-                      className="text-tertiary hover:text-secondary text-sm mt-0.5"
-                      draggable="false"
-                    >
-                      {isCollapsed ? "▶" : "▼"}
-                    </button>
+                  <TooltipTrigger
+                    onClick={() => toggleTaskCollapsed(task.id)}
+                    className="text-tertiary hover:text-secondary text-sm mt-0.5"
+                  >
+                    {isCollapsed ? "▶" : "▼"}
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>{isCollapsed ? "Show subtasks" : "Hide subtasks"}</p>

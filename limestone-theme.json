@@ -1,0 +1,28 @@
+{
+  "name": "Limestone",
+  "colors": {
+    "status_blocked": "217 119 119",
+    "status_ready": "139 172 204",
+    "status_in_progress": "162 194 151",
+    "status_done": "156 156 156",
+    "bg_primary": "40 38 35",
+    "bg_secondary": "53 50 45",
+    "bg_tertiary": "67 63 56",
+    "bg_quaternary": "81 76 68",
+    "text_primary": "235 230 220",
+    "text_secondary": "204 197 183",
+    "text_tertiary": "168 161 148",
+    "text_quaternary": "133 127 116",
+    "border_primary": "67 63 56",
+    "border_secondary": "81 76 68",
+    "accent_primary": "176 151 118",
+    "accent_hover": "158 133 100",
+    "accent_star": "227 188 122",
+    "sidebar_bg": "40 38 35",
+    "sidebar_border": "67 63 56",
+    "input_bg": "53 50 45",
+    "input_border": "81 76 68",
+    "button_secondary": "67 63 56",
+    "button_secondary_hover": "81 76 68"
+  }
+}

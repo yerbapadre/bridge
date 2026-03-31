@@ -277,18 +277,14 @@ fn focus_ghostty_window(window_title: String) -> Result<(), String> {
         // Properly escape the window title to prevent AppleScript injection
         let escaped_title = escape_applescript_string(&window_title);
 
-        // Use a simpler approach: activate Ghostty and use System Events to bring window forward
+        // Use Ghostty's native "focus" command (no Accessibility permissions needed!)
         let script = format!(
             r#"
             tell application "Ghostty"
-                activate
-            end tell
-
-            tell application "System Events"
-                tell process "Ghostty"
-                    set frontmost to true
-                    perform action "AXRaise" of (first window whose name is "{}")
-                end tell
+                set matches to every terminal whose name is "{}"
+                if (count of matches) > 0 then
+                    focus item 1 of matches
+                end if
             end tell
             "#,
             escaped_title
@@ -301,18 +297,7 @@ fn focus_ghostty_window(window_title: String) -> Result<(), String> {
             .map_err(|e| format!("Failed to execute AppleScript: {}", e))?;
 
         if !output.status.success() {
-            // If System Events approach fails, just activate Ghostty (it's better than nothing)
-            let simple_script = r#"
-                tell application "Ghostty"
-                    activate
-                end tell
-            "#;
-
-            Command::new("osascript")
-                .arg("-e")
-                .arg(simple_script)
-                .output()
-                .map_err(|e| format!("Failed to execute fallback AppleScript: {}", e))?;
+            return Err(format!("AppleScript failed: {}", String::from_utf8_lossy(&output.stderr)));
         }
 
         Ok(())
