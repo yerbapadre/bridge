@@ -61,28 +61,80 @@ function ActiveView({
   return (
     <div className="flex-1 overflow-y-auto space-y-6">      {/* Focus Zone - Takes up half the screen */}
       {focusTask ? (
-        <div className="bg-tertiary rounded-lg border-4 border-accent p-4 md:p-8 shadow-2xl min-h-[33vh] flex flex-col justify-between">
-          <div className="flex flex-col lg:flex-row gap-4 md:gap-8">
-            <div className="flex-1">
-              <div className="text-xs font-semibold text-tertiary uppercase mb-2 tracking-wide">
-                ⚡ Currently Active
+        <div className="bg-tertiary rounded-lg border-4 border-accent p-4 md:p-8 shadow-2xl">
+          <div className="flex flex-col lg:flex-row gap-6 md:gap-8">
+            {/* Left column: Task details + Timer/buttons */}
+            <div className="flex-1 flex flex-col gap-8">
+              <div>
+                <div className="text-xs font-semibold text-tertiary uppercase mb-2 tracking-wide">
+                  ⚡ Currently Active
+                </div>
+                <h2 className="text-2xl md:text-3xl font-bold text-primary mb-3 leading-tight">
+                  {focusTask.title}
+                </h2>
+                <div className="flex items-center gap-2 text-sm text-secondary mb-4">
+                  <span>
+                    {getTrackName(focusTask.track_id)}
+                    {getTrackType(focusTask.track_id) === "main" && <span className="text-star ml-1">★</span>}
+                  </span>
+                </div>
+                {focusTask.description && (
+                  <p className="text-base text-secondary leading-relaxed">{focusTask.description}</p>
+                )}
               </div>
-              <h2 className="text-2xl md:text-3xl font-bold text-primary mb-3 leading-tight">
-                {focusTask.title}
-              </h2>
-              <div className="flex items-center gap-2 text-sm text-secondary mb-4">
-                <span>
-                  {getTrackName(focusTask.track_id)}
-                  {getTrackType(focusTask.track_id) === "main" && <span className="text-star ml-1">★</span>}
-                </span>
+
+              <div>
+                {activeTimer ? (
+                  <div className="mb-8">
+                    <div className="text-4xl md:text-5xl font-mono font-bold text-header-in-progress mb-1">
+                      {formatTime(elapsedSeconds)}
+                    </div>
+                    <div className="text-xs text-tertiary">
+                      Started {formatTimestamp(activeTimer.started_at)}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-8">
+                    <div className="text-lg text-tertiary">
+                      Timer stopped
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2 md:gap-3">
+                  <button
+                    onClick={() => advanceTaskStatus(focusTask.id, focusTask.status)}
+                    className="px-4 md:px-5 py-2.5 rounded-lg bg-accent font-medium text-sm shadow-lg flex-1 sm:flex-initial"
+                  >
+                    {focusTask.status === "ready" ? "Mark In Progress →" : "Complete Task →"}
+                  </button>
+                  {activeTimer ? (
+                    <button
+                      onClick={stopCurrentTimer}
+                      className="px-4 md:px-5 py-2.5 rounded-lg bg-button-secondary hover:bg-button-secondary-hover text-secondary font-medium text-sm flex-1 sm:flex-initial"
+                    >
+                      ⏸ Stop Timer
+                    </button>
+                  ) : (
+                    <button
+                      onClick={resumeTimer}
+                      className="px-4 md:px-5 py-2.5 rounded-lg bg-status-in-progress text-white font-medium text-sm flex-1 sm:flex-initial"
+                    >
+                      ▶ Start Timer
+                    </button>
+                  )}
+                  <button
+                    onClick={() => onUpdateTaskStatus(focusTask.id, "blocked")}
+                    className="px-4 md:px-5 py-2.5 rounded-lg bg-button-secondary hover:bg-button-secondary-hover text-secondary font-medium text-sm flex-1 sm:flex-initial"
+                  >
+                    🔴 Block
+                  </button>
+                </div>
               </div>
-              {focusTask.description && (
-                <p className="text-base text-secondary mb-6 leading-relaxed">{focusTask.description}</p>
-              )}
             </div>
 
-            {/* Terminal navigation - stacks below on mobile */}
-            <div className="lg:w-80 bg-secondary rounded-lg p-4 border border-border-primary">
+            {/* Right column: Terminal sessions */}
+            <div className="lg:w-80 bg-secondary rounded-lg p-4 border border-border-primary self-start">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-xs font-semibold text-tertiary uppercase">
                   Terminal Sessions
@@ -137,55 +189,6 @@ function ActiveView({
                   ))}
                 </div>
               )}
-            </div>
-          </div>
-
-          <div className="mt-6">
-            {activeTimer ? (
-              <div className="mb-6">
-                <div className="text-4xl md:text-5xl font-mono font-bold text-header-in-progress mb-1">
-                  {formatTime(elapsedSeconds)}
-                </div>
-                <div className="text-xs text-tertiary">
-                  Started {formatTimestamp(activeTimer.started_at)}
-                </div>
-              </div>
-            ) : (
-              <div className="mb-6">
-                <div className="text-lg text-tertiary">
-                  Timer stopped
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-2 md:gap-3">
-              <button
-                onClick={() => advanceTaskStatus(focusTask.id, focusTask.status)}
-                className="px-4 md:px-5 py-2.5 rounded-lg bg-accent font-medium text-sm shadow-lg flex-1 sm:flex-initial"
-              >
-                {focusTask.status === "ready" ? "Mark In Progress →" : "Complete Task →"}
-              </button>
-              {activeTimer ? (
-                <button
-                  onClick={stopCurrentTimer}
-                  className="px-4 md:px-5 py-2.5 rounded-lg bg-button-secondary hover:bg-button-secondary-hover text-secondary font-medium text-sm flex-1 sm:flex-initial"
-                >
-                  ⏸ Stop Timer
-                </button>
-              ) : (
-                <button
-                  onClick={resumeTimer}
-                  className="px-4 md:px-5 py-2.5 rounded-lg bg-status-in-progress text-white font-medium text-sm flex-1 sm:flex-initial"
-                >
-                  ▶ Start Timer
-                </button>
-              )}
-              <button
-                onClick={() => onUpdateTaskStatus(focusTask.id, "blocked")}
-                className="px-4 md:px-5 py-2.5 rounded-lg bg-button-secondary hover:bg-button-secondary-hover text-secondary font-medium text-sm flex-1 sm:flex-initial"
-              >
-                🔴 Block
-              </button>
             </div>
           </div>
         </div>

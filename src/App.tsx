@@ -1,102 +1,103 @@
 import { useState, useEffect } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useProjects, useTasks, useFocus, useTerminals, usePreferences } from "@/hooks";
-import { getStatusBorderColor, formatTime } from "@/lib/theme";
-import type { GhosttyWindow } from "@/types";
+import { usePreferences } from "@/hooks";
+import { useProjectStore, useTaskStore, useFocusStore, useTerminalStore } from "@/stores";
+import { formatTime } from "@/lib/theme";
+import type { GhosttyWindow, Task } from "@/types";
+import Sidebar from "@/components/Sidebar";
+import Clock from "@/components/Clock";
 import SettingsView from "@/views/SettingsView";
 import ActiveView from "@/views/ActiveView";
 import RetroView from "@/views/RetroView";
 import TerminalsView from "@/views/TerminalsView";
-import TrackColumn from "@/views/TrackColumn";
+import BoardView from "@/views/BoardView";
 import BlockTaskModal from "@/components/BlockTaskModal";
 
 export default function App() {
   usePreferences();
 
-  const {
-    projects,
-    currentProject,
-    currentProjectId,
-    setCurrentProjectId,
-    createProject,
-    updateProject,
-    deleteProject,
-    getProjectTaskCount,
-    error: projectsError,
-    setError: setProjectsError,
-  } = useProjects();
+  const projects = useProjectStore(state => state.projects);
+  const currentProject = useProjectStore(state => state.currentProject());
+  const currentProjectId = useProjectStore(state => state.currentProjectId);
+  const setCurrentProjectId = useProjectStore(state => state.setCurrentProjectId);
+  const createProject = useProjectStore(state => state.createProject);
+  const updateProject = useProjectStore(state => state.updateProject);
+  const deleteProject = useProjectStore(state => state.deleteProject);
+  const getProjectTaskCount = useProjectStore(state => state.getProjectTaskCount);
+  const projectsError = useProjectStore(state => state.error);
+  const setProjectsError = useProjectStore(state => state.setError);
 
-  const {
-    tracks,
-    tasks,
-    dependencies,
-    mainTrack,
-    sideTracks,
-    createTrack,
-    deleteTrack,
-    reorderTracks,
-    createTask,
-    updateTaskStatus,
-    deleteTask,
-    reorderTasks,
-    addDependency,
-    getTasksForTrack,
-    getSubtasks,
-    hasSubtasks,
-    advanceTaskStatus,
-    loadData,
-    error: tasksError,
-    setError: setTasksError,
-  } = useTasks(currentProjectId);
+  const tracks = useTaskStore(state => state.tracks);
+  const tasks = useTaskStore(state => state.tasks);
+  const dependencies = useTaskStore(state => state.dependencies);
+  const createTrack = useTaskStore(state => state.createTrack);
+  const deleteTrack = useTaskStore(state => state.deleteTrack);
+  const reorderTracks = useTaskStore(state => state.reorderTracks);
+  const createTask = useTaskStore(state => state.createTask);
+  const updateTaskStatus = useTaskStore(state => state.updateTaskStatus);
+  const deleteTask = useTaskStore(state => state.deleteTask);
+  const reorderTasks = useTaskStore(state => state.reorderTasks);
+  const addDependency = useTaskStore(state => state.addDependency);
+  const getTasksForTrack = useTaskStore(state => state.getTasksForTrack);
+  const getSubtasks = useTaskStore(state => state.getSubtasks);
+  const hasSubtasks = useTaskStore(state => state.hasSubtasks);
+  const advanceTaskStatus = useTaskStore(state => state.advanceTaskStatus);
+  const loadTaskData = useTaskStore(state => state.loadData);
+  const tasksError = useTaskStore(state => state.error);
+  const setTasksError = useTaskStore(state => state.setError);
 
-  const {
-    focusTask,
-    activeTimer,
-    elapsedSeconds,
-    switchFocusTask,
-    stopCurrentTimer,
-    resumeTimer,
-    error: focusError,
-    setError: setFocusError,
-  } = useFocus(tasks);
+  const focusTask = useFocusStore(state => state.focusTask);
+  const activeTimer = useFocusStore(state => state.activeTimer);
+  const elapsedSeconds = useFocusStore(state => state.elapsedSeconds);
+  const switchFocusTask = useFocusStore(state => state.switchFocusTask);
+  const stopCurrentTimer = useFocusStore(state => state.stopCurrentTimer);
+  const resumeTimer = useFocusStore(state => state.resumeTimer);
+  const syncFocusFromTasks = useFocusStore(state => state.syncFocusFromTasks);
+  const focusError = useFocusStore(state => state.error);
+  const setFocusError = useFocusStore(state => state.setError);
 
-  const {
-    terminalSessions,
-    allTerminalSessions,
-    availableWindows,
-    loadAllTerminalSessions,
-    loadAvailableWindows,
-    linkTerminalWindow,
-    focusTerminalSession,
-    deleteTerminalSession,
-    deleteTerminalSessionFromAllView,
-    error: terminalsError,
-    setError: setTerminalsError,
-  } = useTerminals(focusTask);
+  const terminalSessions = useTerminalStore(state => state.terminalSessions);
+  const allTerminalSessions = useTerminalStore(state => state.allTerminalSessions);
+  const availableWindows = useTerminalStore(state => state.availableWindows);
+  const loadAvailableWindows = useTerminalStore(state => state.loadAvailableWindows);
+  const linkTerminalWindow = useTerminalStore(state => state.linkTerminalWindow);
+  const focusTerminalSession = useTerminalStore(state => state.focusTerminalSession);
+  const deleteTerminalSession = useTerminalStore(state => state.deleteTerminalSession);
+  const deleteTerminalSessionFromAllView = useTerminalStore(state => state.deleteTerminalSessionFromAllView);
+  const terminalsError = useTerminalStore(state => state.error);
+  const setTerminalsError = useTerminalStore(state => state.setError);
+
+  // Compute derived state
+  const mainTrack = tracks.find(t => t.type === 'main');
+  const sideTracks = tracks.filter(t => t.type === 'side');
+
+  // Load initial data
+  useEffect(() => {
+    const loadProjects = useProjectStore.getState().loadProjects;
+    const loadFocusAndTimer = useFocusStore.getState().loadFocusAndTimer;
+    loadProjects();
+    loadFocusAndTimer();
+  }, []);
+
+  // Load tasks when project changes
+  useEffect(() => {
+    if (currentProjectId) {
+      loadTaskData(currentProjectId);
+    }
+  }, [currentProjectId, loadTaskData]);
+
+  // Sync focus task when tasks change
+  useEffect(() => {
+    syncFocusFromTasks(tasks);
+  }, [tasks, syncFocusFromTasks]);
 
   const [currentView, setCurrentView] = useState<"board" | "active" | "retro" | "terminals" | "settings">("active");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [projectsExpanded, setProjectsExpanded] = useState(true);
-  const [newProjectName, setNewProjectName] = useState("");
-  const [isAddingProject, setIsAddingProject] = useState(false);
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [editingProjectName, setEditingProjectName] = useState("");
   const [deleteConfirmProjectId, setDeleteConfirmProjectId] = useState<string | null>(null);
   const [deleteConfirmTaskCount, setDeleteConfirmTaskCount] = useState(0);
   const [deleteConfirmTrackId, setDeleteConfirmTrackId] = useState<string | null>(null);
   const [deleteConfirmTrackTaskCount, setDeleteConfirmTrackTaskCount] = useState(0);
-  const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null);
   const [blockModalTaskId, setBlockModalTaskId] = useState<string | null>(null);
   const [showLinkTerminalModal, setShowLinkTerminalModal] = useState(false);
-  const [newTrackName, setNewTrackName] = useState("");
-  const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
-  const [selectedParentTaskId, setSelectedParentTaskId] = useState<string | null>(null);
-  const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set());
-  const [draggedTrackId, setDraggedTrackId] = useState<string | null>(null);
-  const [dragOverTrackId, setDragOverTrackId] = useState<string | null>(null);
-  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
 
   const error = projectsError || tasksError || focusError || terminalsError;
   const setError = (e: string | null) => {
@@ -106,37 +107,22 @@ export default function App() {
     setTerminalsError(e);
   };
 
-  useEffect(() => {
-    const handleClickOutside = () => setOpenMenuProjectId(null);
-    if (openMenuProjectId) {
-      document.addEventListener("click", handleClickOutside);
-      return () => document.removeEventListener("click", handleClickOutside);
-    }
-  }, [openMenuProjectId]);
-
-  useEffect(() => {
-    if (currentView === "terminals") {
-      loadAllTerminalSessions();
-    }
-  }, [currentView]);
-
-  const handleCreateProject = async () => {
-    const project = await createProject(newProjectName);
-    if (project) {
-      setNewProjectName("");
-      setIsAddingProject(false);
+  const handleSelectProject = (projectId: string) => {
+    setCurrentProjectId(projectId);
+    if (currentView === "settings") {
       setCurrentView("active");
     }
   };
 
-  const handleUpdateProject = async () => {
-    if (editingProjectId) {
-      const success = await updateProject(editingProjectId, editingProjectName);
-      if (success) {
-        setEditingProjectId(null);
-        setEditingProjectName("");
-      }
+  const handleCreateProject = async (name: string) => {
+    const project = await createProject(name);
+    if (project) {
+      setCurrentView("active");
     }
+  };
+
+  const handleUpdateProject = async (id: string, name: string) => {
+    await updateProject(id, name);
   };
 
   const handleDeleteProject = async (projectId: string) => {
@@ -153,11 +139,6 @@ export default function App() {
     }
   };
 
-  const handleCreateTrack = async () => {
-    const success = await createTrack(newTrackName);
-    if (success) setNewTrackName("");
-  };
-
   const handleDeleteTrack = async (trackId: string) => {
     const taskCount = tasks.filter(t => t.track_id === trackId).length;
     setDeleteConfirmTrackId(trackId);
@@ -165,96 +146,31 @@ export default function App() {
   };
 
   const confirmDeleteTrack = async () => {
-    if (deleteConfirmTrackId) {
-      await deleteTrack(deleteConfirmTrackId);
+    if (deleteConfirmTrackId && currentProjectId) {
+      await deleteTrack(deleteConfirmTrackId, currentProjectId);
       setDeleteConfirmTrackId(null);
       setDeleteConfirmTrackTaskCount(0);
     }
   };
 
-  const handleCreateTask = async (trackId: string, parentTaskId: string | null = null) => {
-    const success = await createTask(trackId, newTaskTitle, parentTaskId);
-    if (success) {
-      setNewTaskTitle("");
-      setSelectedTrackId(null);
-      setSelectedParentTaskId(null);
-    }
+  const handleCreateTrack = async (name: string) => {
+    if (!currentProjectId) return;
+    await createTrack(name, currentProjectId);
   };
 
-  const toggleTaskCollapsed = (taskId: string) => {
-    setCollapsedTasks((prev) => {
-      const next = new Set(prev);
-      if (next.has(taskId)) {
-        next.delete(taskId);
-      } else {
-        next.add(taskId);
-      }
-      return next;
-    });
+  const handleCreateTask = async (trackId: string, title: string, parentTaskId: string | null) => {
+    if (!currentProjectId) return;
+    await createTask(trackId, title, parentTaskId, currentProjectId);
   };
 
-  const handleTrackDragStart = (trackId: string) => setDraggedTrackId(trackId);
-  const handleTrackDragOver = (e: React.DragEvent, trackId: string) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverTrackId(trackId);
-  };
-  const handleTrackDragLeave = () => setDragOverTrackId(null);
-  const handleTrackDrop = async (e: React.DragEvent, targetTrackId: string) => {
-    e.preventDefault();
-    if (!draggedTrackId) return;
-
-    const targetTrack = tracks.find((t) => t.id === targetTrackId);
-    if (!targetTrack) return;
-
-    await reorderTracks(draggedTrackId, targetTrack.position);
-    setDraggedTrackId(null);
-    setDragOverTrackId(null);
-  };
-  const handleTrackDragEnd = () => {
-    setDraggedTrackId(null);
-    setDragOverTrackId(null);
+  const handleReorderTracks = async (trackId: string, newPosition: number) => {
+    if (!currentProjectId) return;
+    await reorderTracks(trackId, newPosition, currentProjectId);
   };
 
-  const handleTaskDragStart = (taskId: string) => setDraggedTaskId(taskId);
-  const handleTaskDragOver = (e: React.DragEvent, targetTaskId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = "move";
-
-    if (!draggedTaskId || draggedTaskId === targetTaskId) return;
-
-    const draggedTask = tasks.find((t) => t.id === draggedTaskId);
-    const targetTask = tasks.find((t) => t.id === targetTaskId);
-
-    if (!draggedTask || !targetTask) return;
-    if (draggedTask.track_id !== targetTask.track_id) return;
-    if (draggedTask.parent_task_id !== targetTask.parent_task_id) return;
-
-    setDragOverTaskId(targetTaskId);
-  };
-  const handleTaskDragLeave = () => setDragOverTaskId(null);
-  const handleTaskDrop = async (e: React.DragEvent, targetTaskId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!draggedTaskId) return;
-
-    const draggedTask = tasks.find((t) => t.id === draggedTaskId);
-    const targetTask = tasks.find((t) => t.id === targetTaskId);
-
-    if (!draggedTask || !targetTask) return;
-    if (draggedTask.id === targetTask.id) return;
-    if (draggedTask.track_id !== targetTask.track_id) return;
-    if (draggedTask.parent_task_id !== targetTask.parent_task_id) return;
-
-    await reorderTasks(draggedTaskId, targetTask.position);
-    setDraggedTaskId(null);
-    setDragOverTaskId(null);
-  };
-  const handleTaskDragEnd = () => {
-    setDraggedTaskId(null);
-    setDragOverTaskId(null);
+  const handleReorderTasks = async (taskId: string, newPosition: number) => {
+    if (!currentProjectId) return;
+    await reorderTasks(taskId, newPosition, currentProjectId);
   };
 
   const handleOpenLinkTerminalModal = async () => {
@@ -264,205 +180,69 @@ export default function App() {
 
   const handleLinkTerminalWindow = async (window: GhosttyWindow) => {
     if (!focusTask) return;
-    const success = await linkTerminalWindow(window, focusTask.id);
-    if (success) setShowLinkTerminalModal(false);
+    await linkTerminalWindow(window, focusTask.id);
+    setShowLinkTerminalModal(false);
   };
 
   const handleSwitchFocusTask = async (taskId: string) => {
     await switchFocusTask(taskId);
-    await loadData();
+    if (currentProjectId) {
+      await loadTaskData(currentProjectId);
+    }
+  };
+
+  // Wrapper functions to inject currentProjectId
+  const wrappedUpdateTaskStatus = async (taskId: string, status: Task["status"]) => {
+    if (!currentProjectId) return;
+    await updateTaskStatus(taskId, status, currentProjectId);
+  };
+
+  const wrappedDeleteTask = async (taskId: string) => {
+    if (!currentProjectId) return;
+    await deleteTask(taskId, currentProjectId);
+  };
+
+  const wrappedAdvanceTaskStatus = async (taskId: string, currentStatus: Task["status"]) => {
+    if (!currentProjectId) return;
+    await advanceTaskStatus(taskId, currentStatus, currentProjectId);
+  };
+
+  const wrappedAddDependency = async (taskId: string, blocksTaskId: string) => {
+    if (!currentProjectId) return;
+    await addDependency(taskId, blocksTaskId, currentProjectId);
   };
 
   return (
     <div className="h-screen flex overflow-hidden">
-      {/* Sidebar */}
-      <div
-        className={`bg-sidebar border-r border-sidebar flex flex-col flex-shrink-0 h-full transition-all duration-300 ${
-          sidebarCollapsed ? "w-16" : "w-80"
-        }`}
-      >
-        <div className={`p-4 border-b border-sidebar flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
-          {!sidebarCollapsed && <h2 className="font-bold text-lg text-primary">Bridge</h2>}
-          <button
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className={`text-tertiary hover:text-secondary transition-colors ${sidebarCollapsed ? 'text-xl' : 'text-sm'}`}
-          >
-            {sidebarCollapsed ? "›" : "‹"}
-          </button>
-        </div>
+      <Sidebar
+        projects={projects}
+        currentProjectId={currentProjectId}
+        currentView={currentView}
+        onSelectProject={handleSelectProject}
+        onCreateProject={handleCreateProject}
+        onUpdateProject={handleUpdateProject}
+        onDeleteProject={handleDeleteProject}
+        onNavigateToSettings={() => setCurrentView("settings")}
+      />
 
-        {sidebarCollapsed ? (
-          <div className="flex-1"></div>
-        ) : (
-          <div className="flex-1 overflow-y-auto">
-            <div className="p-2">
-              <button
-                onClick={() => setProjectsExpanded(!projectsExpanded)}
-                className="w-full text-left px-3 py-2 text-xs font-semibold text-tertiary hover:text-secondary flex items-center justify-between gap-2"
-              >
-                <span>PROJECTS</span>
-                <span>{projectsExpanded ? "▼" : "▶"}</span>
-              </button>
-
-              {projectsExpanded && (
-                <div className="mt-1 ml-2">
-                  {projects.map((project) => (
-                    editingProjectId === project.id ? (
-                      <div key={project.id} className="flex gap-2 px-2 py-1 mb-1">
-                        <input
-                          type="text"
-                          value={editingProjectName}
-                          onChange={(e) => setEditingProjectName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleUpdateProject();
-                            if (e.key === "Escape") {
-                              setEditingProjectId(null);
-                              setEditingProjectName("");
-                            }
-                          }}
-                          onBlur={() => {
-                            if (editingProjectName.trim()) {
-                              handleUpdateProject();
-                            } else {
-                              setEditingProjectId(null);
-                              setEditingProjectName("");
-                            }
-                          }}
-                          autoFocus
-                          className="flex-1 bg-tertiary border border-border-primary rounded px-2 py-1 text-sm text-primary"
-                        />
-                      </div>
-                    ) : (
-                      <div key={project.id} className="group relative mb-1">
-                        <button
-                          onClick={() => {
-                            setCurrentProjectId(project.id);
-                            if (currentView === "settings") {
-                              setCurrentView("active");
-                            }
-                          }}
-                          className={`w-full text-left px-3 py-2 rounded text-sm transition-colors flex items-center justify-between ${
-                            currentProjectId === project.id && currentView !== "settings"
-                              ? "bg-accent font-medium"
-                              : "text-secondary hover:bg-button-secondary"
-                          }`}
-                        >
-                          <span>{project.name}</span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenMenuProjectId(openMenuProjectId === project.id ? null : project.id);
-                            }}
-                            className="text-tertiary hover:text-secondary text-sm px-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="More options"
-                          >
-                            ⋯
-                          </button>
-                        </button>
-                        {openMenuProjectId === project.id && (
-                          <div className="absolute right-2 top-10 bg-button-secondary border border-sidebar rounded shadow-lg z-10 min-w-[150px]">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingProjectId(project.id);
-                                setEditingProjectName(project.name);
-                                setOpenMenuProjectId(null);
-                              }}
-                              className="w-full text-left px-3 py-2 text-sm hover:bg-button-secondary-hover text-secondary"
-                            >
-                              Rename
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteProject(project.id);
-                                setOpenMenuProjectId(null);
-                              }}
-                              className="w-full text-left px-3 py-2 text-sm hover:bg-button-secondary-hover text-error"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  ))}
-
-                  {isAddingProject ? (
-                    <div className="flex gap-2 px-3 py-2">
-                      <input
-                        type="text"
-                        value={newProjectName}
-                        onChange={(e) => setNewProjectName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleCreateProject();
-                          if (e.key === "Escape") {
-                            setIsAddingProject(false);
-                            setNewProjectName("");
-                          }
-                        }}
-                        onBlur={() => {
-                          if (!newProjectName.trim()) {
-                            setIsAddingProject(false);
-                          }
-                        }}
-                        placeholder="Project name..."
-                        autoFocus
-                        className="flex-1 bg-input border border-input rounded px-2 py-1 text-sm text-primary"
-                      />
-                      <button
-                        onClick={handleCreateProject}
-                        className="bg-accent px-2 py-1 rounded text-xs"
-                      >
-                        Add
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setIsAddingProject(true)}
-                      className="w-full text-left px-3 py-2 rounded text-sm text-tertiary hover:text-secondary hover:bg-button-secondary"
-                    >
-                      + New Project
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="border-t border-sidebar p-2">
-          <button
-            onClick={() => setCurrentView("settings")}
-            className={`w-full px-3 py-2 rounded transition-colors ${
-              sidebarCollapsed ? 'text-center' : 'text-left flex items-center gap-2'
-            } ${
-              currentView === "settings"
-                ? "bg-accent font-medium"
-                : "text-secondary hover:bg-button-secondary"
-            }`}
-          >
-            {sidebarCollapsed ? (
-              <span className="text-2xl">⚙</span>
-            ) : (
-              <>
-                <span className="text-2xl">⚙</span>
-                <span className="text-sm">Settings</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-y-auto h-full p-6">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2 text-primary">
-            {currentView === "settings" ? "Settings" : currentProject?.name || "Bridge"}
-          </h1>
-          <p className="text-sm text-tertiary">
-            {currentView === "settings" ? "Customize your application" : "Parallelization Command Center"}
-          </p>
+        <div className="mb-6 flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold mb-2 text-primary">
+              {currentView === "settings" ? "Settings" : currentProject?.name || "Bridge"}
+            </h1>
+            <p className="text-sm text-tertiary">
+              {currentView === "settings" ? "Customize your application" : "Parallelization Command Center"}
+            </p>
+          </div>
+          <div className="text-right">
+            <Clock />
+            {focusTask && (
+              <div className="text-sm text-tertiary mt-1">
+                Focus: {formatTime(elapsedSeconds)}
+              </div>
+            )}
+          </div>
         </div>
 
         {currentView !== "settings" && (
@@ -488,16 +268,6 @@ export default function App() {
               Board View
             </button>
             <button
-              onClick={() => setCurrentView("retro")}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                currentView === "retro"
-                  ? "text-accent border-b-2 border-accent"
-                  : "text-tertiary hover:text-secondary"
-              }`}
-            >
-              Retro
-            </button>
-            <button
               onClick={() => setCurrentView("terminals")}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
                 currentView === "terminals"
@@ -506,6 +276,16 @@ export default function App() {
               }`}
             >
               Terminals
+            </button>
+            <button
+              onClick={() => setCurrentView("retro")}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                currentView === "retro"
+                  ? "text-accent border-b-2 border-accent"
+                  : "text-tertiary hover:text-secondary"
+              }`}
+            >
+              Retro
             </button>
           </div>
         )}
@@ -558,111 +338,24 @@ export default function App() {
             deleteTerminalSession={deleteTerminalSessionFromAllView}
           />
         ) : currentView === "board" ? (
-          <>
-            {tracks.length < 8 && (
-              <div className="mb-6 flex gap-2">
-                <input
-                  type="text"
-                  value={newTrackName}
-                  onChange={(e) => setNewTrackName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleCreateTrack()}
-                  placeholder={`New ${tracks.length === 0 ? "main" : "side"} track name...`}
-                  className="flex-1 bg-input border border-input rounded px-3 py-2 text-sm text-primary"
-                />
-                <button
-                  onClick={handleCreateTrack}
-                  className="bg-accent px-4 py-2 rounded text-sm font-medium"
-                >
-                  Add Track
-                </button>
-              </div>
-            )}
-
-            <div className="flex gap-4 overflow-x-auto pb-4 flex-1">
-              {mainTrack && (
-                <TrackColumn
-                  track={mainTrack}
-                  tasks={getTasksForTrack(mainTrack.id)}
-                  onDeleteTrack={handleDeleteTrack}
-                  onCreateTask={handleCreateTask}
-                  onUpdateTaskStatus={updateTaskStatus}
-                  onDeleteTask={deleteTask}
-                  advanceTaskStatus={advanceTaskStatus}
-                  getStatusBorderColor={getStatusBorderColor}
-                  getSubtasks={getSubtasks}
-                  hasSubtasks={hasSubtasks}
-                  collapsedTasks={collapsedTasks}
-                  toggleTaskCollapsed={toggleTaskCollapsed}
-                  selectedTrackId={selectedTrackId}
-                  setSelectedTrackId={setSelectedTrackId}
-                  selectedParentTaskId={selectedParentTaskId}
-                  setSelectedParentTaskId={setSelectedParentTaskId}
-                  newTaskTitle={newTaskTitle}
-                  setNewTaskTitle={setNewTaskTitle}
-                  onOpenBlockModal={setBlockModalTaskId}
-                  onTrackDragStart={handleTrackDragStart}
-                  onTrackDragOver={handleTrackDragOver}
-                  onTrackDragLeave={handleTrackDragLeave}
-                  onTrackDrop={handleTrackDrop}
-                  onTrackDragEnd={handleTrackDragEnd}
-                  isDragging={draggedTrackId === mainTrack.id}
-                  isDragOver={dragOverTrackId === mainTrack.id}
-                  onTaskDragStart={handleTaskDragStart}
-                  onTaskDragOver={handleTaskDragOver}
-                  onTaskDragLeave={handleTaskDragLeave}
-                  onTaskDrop={handleTaskDrop}
-                  onTaskDragEnd={handleTaskDragEnd}
-                  draggedTaskId={draggedTaskId}
-                  dragOverTaskId={dragOverTaskId}
-                />
-              )}
-
-              {sideTracks.map((track) => (
-                <TrackColumn
-                  key={track.id}
-                  track={track}
-                  tasks={getTasksForTrack(track.id)}
-                  onDeleteTrack={handleDeleteTrack}
-                  onCreateTask={handleCreateTask}
-                  onUpdateTaskStatus={updateTaskStatus}
-                  onDeleteTask={deleteTask}
-                  advanceTaskStatus={advanceTaskStatus}
-                  getStatusBorderColor={getStatusBorderColor}
-                  getSubtasks={getSubtasks}
-                  hasSubtasks={hasSubtasks}
-                  collapsedTasks={collapsedTasks}
-                  toggleTaskCollapsed={toggleTaskCollapsed}
-                  selectedTrackId={selectedTrackId}
-                  setSelectedTrackId={setSelectedTrackId}
-                  selectedParentTaskId={selectedParentTaskId}
-                  setSelectedParentTaskId={setSelectedParentTaskId}
-                  newTaskTitle={newTaskTitle}
-                  setNewTaskTitle={setNewTaskTitle}
-                  onOpenBlockModal={setBlockModalTaskId}
-                  onTrackDragStart={handleTrackDragStart}
-                  onTrackDragOver={handleTrackDragOver}
-                  onTrackDragLeave={handleTrackDragLeave}
-                  onTrackDrop={handleTrackDrop}
-                  onTrackDragEnd={handleTrackDragEnd}
-                  isDragging={draggedTrackId === track.id}
-                  isDragOver={dragOverTrackId === track.id}
-                  onTaskDragStart={handleTaskDragStart}
-                  onTaskDragOver={handleTaskDragOver}
-                  onTaskDragLeave={handleTaskDragLeave}
-                  onTaskDrop={handleTaskDrop}
-                  onTaskDragEnd={handleTaskDragEnd}
-                  draggedTaskId={draggedTaskId}
-                  dragOverTaskId={dragOverTaskId}
-                />
-              ))}
-            </div>
-
-            {tracks.length === 0 && (
-              <div className="text-center py-12 text-tertiary">
-                <p className="mb-4">No tracks yet. Create your main track to get started.</p>
-              </div>
-            )}
-          </>
+          <BoardView
+            tracks={tracks}
+            tasks={tasks}
+            mainTrack={mainTrack}
+            sideTracks={sideTracks}
+            getTasksForTrack={getTasksForTrack}
+            getSubtasks={getSubtasks}
+            hasSubtasks={hasSubtasks}
+            onCreateTrack={handleCreateTrack}
+            onDeleteTrack={handleDeleteTrack}
+            onReorderTracks={handleReorderTracks}
+            onCreateTask={handleCreateTask}
+            onUpdateTaskStatus={wrappedUpdateTaskStatus}
+            onDeleteTask={wrappedDeleteTask}
+            onReorderTasks={handleReorderTasks}
+            advanceTaskStatus={wrappedAdvanceTaskStatus}
+            onOpenBlockModal={setBlockModalTaskId}
+          />
         ) : (
           <ActiveView
             tasks={tasks}
@@ -671,8 +364,8 @@ export default function App() {
             activeTimer={activeTimer}
             elapsedSeconds={elapsedSeconds}
             formatTime={formatTime}
-            onUpdateTaskStatus={updateTaskStatus}
-            advanceTaskStatus={advanceTaskStatus}
+            onUpdateTaskStatus={wrappedUpdateTaskStatus}
+            advanceTaskStatus={wrappedAdvanceTaskStatus}
             switchFocusTask={handleSwitchFocusTask}
             stopCurrentTimer={stopCurrentTimer}
             resumeTimer={resumeTimer}
@@ -691,7 +384,7 @@ export default function App() {
           tracks={tracks}
           dependencies={dependencies}
           onClose={() => setBlockModalTaskId(null)}
-          onAddDependency={addDependency}
+          onAddDependency={wrappedAddDependency}
         />
       )}
 
