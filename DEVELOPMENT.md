@@ -198,6 +198,77 @@ className="border-t border-l border-r border-task-card border-b-4 border-status-
 
 The status classes use `border-bottom-color` with `!important` to override.
 
+### 6. Terminal Session Integration
+
+Bridge can link Ghostty terminal instances to tasks, allowing you to quickly focus the terminal associated with a specific task.
+
+**Data Model:**
+```
+Task (1) ──> (N) TerminalSession
+```
+
+**TerminalSession Fields:**
+- `id`: UUID
+- `task_id`: Foreign key to tasks table
+- `terminal_app`: Always "ghostty" (future: support other terminals)
+- `terminal_uuid`: Ghostty terminal UUID
+- `window_title`: Terminal name (e.g., "pnpm run tauri dev")
+- `working_dir`: Optional working directory
+- `created_at`: Timestamp
+- `last_focused_at`: Updated when terminal is focused
+
+**How It Works:**
+
+1. **List Terminals**: `list_ghostty_windows()` uses AppleScript to query Ghostty
+   - Lists all **terminal** instances (not windows or tabs)
+   - Terminal = most fine-grained level (specific tab's terminal)
+   - Returns: `{id: UUID, title: "command or path", working_dir: null}`
+
+2. **Link Terminal**: User selects a terminal from the list
+   - Creates `TerminalSession` record linking task ↔ terminal
+   - Stores terminal UUID and name for future focus operations
+
+3. **Focus Terminal**: `focus_ghostty_window()` uses Ghostty's native focus command
+   - Matches terminal by name using AppleScript
+   - Calls Ghostty's native `focus` command (no Accessibility permissions needed)
+   - Updates `last_focused_at` timestamp
+
+**AppleScript Integration:**
+
+Ghostty exposes an AppleScript API with this hierarchy:
+```
+Window (tab group container)
+  └─ Tab (individual tab)
+      └─ Terminal (actual terminal instance) ← We use this level
+```
+
+Terminals support the native `focus` command, which:
+- Activates the Ghostty app
+- Brings the window containing that terminal to front
+- Switches to the tab containing that terminal
+- No macOS Accessibility permissions required
+
+**Code Locations:**
+- Backend: `src-tauri/src/main.rs` lines 234-378
+  - `list_ghostty_windows()`: Lists terminals via AppleScript
+  - `focus_ghostty_window()`: Focuses terminal by name
+  - `create_terminal_session()`: Creates session record
+  - `update_terminal_session_focus()`: Updates focus timestamp
+  - `delete_terminal_session()`: Removes session link
+- Frontend: `src/App.tsx` lines 751-761
+  - `focusTerminalSession()`: Invokes focus + updates UI
+  - `linkTerminalWindow()`: Creates new terminal link
+  - `openLinkTerminalModal()`: Shows terminal picker
+- Database: `src-tauri/src/db.rs` lines 1514-1611
+  - `terminal_sessions` table schema
+  - CRUD operations for terminal sessions
+
+**UI:**
+- Task cards show linked terminal sessions with a terminal icon
+- Click terminal icon to focus that terminal
+- Click link button to associate a new terminal with the task
+- Multiple terminals can be linked to one task
+
 ## State Management
 
 All state is in `App.tsx` using React useState:

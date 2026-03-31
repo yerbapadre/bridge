@@ -1,19 +1,16 @@
 # Bridge
 
-A desktop task management application for parallel work streams.
+Task manager for juggling multiple work streams at once.
 
-## What is Bridge?
+Built for the "parallelization command center" workflow — one main track plus several side tracks running in parallel.
 
-Bridge helps you manage multiple tracks of work simultaneously. It's designed for the "parallelization command center" workflow where you need to juggle a main track plus several side tracks.
-
-**Key Features:**
-- Track-based task organization (main + side tracks)
-- Hierarchical tasks with subtasks
-- Task dependencies and automatic status management
-- Customizable color themes
-- Board view and Active view
-- SQLite persistence
-- Cross-platform desktop app (Tauri)
+- Track-based organization
+- Tasks with subtasks
+- Dependencies that auto-block downstream work
+- Board view (all tracks) and Active view (current focus)
+- Terminal session linking (Ghostty integration)
+- Theme customization
+- Desktop app via Tauri + SQLite
 
 ## Quick Start
 
@@ -30,32 +27,34 @@ npm run tauri build
 
 ## Views
 
-### Board View
-Kanban-style columns showing all tracks and their tasks. Main track marked with ★.
+**Board** — Kanban columns for all tracks. Main track has a ★.
 
-### Active View
-Grid showing only tasks that are "ready" or "in progress" - your current focus items.
+**Active** — Just the tasks you can work on right now (ready or in progress).
 
-### Settings
-Customize all application colors. Changes persist across sessions.
+**Settings** — Change colors. Persists across sessions.
 
 ## Task States
 
-- **Blocked** 🔴 - Has incomplete dependencies
-- **Ready** 🔵 - Available to start
-- **In Progress** 🟢 - Currently working on
-- **Done** ✅ - Completed
+- **Blocked** 🔴 — dependencies aren't done yet
+- **Ready** 🔵 — can start now
+- **In Progress** 🟢 — working on it
+- **Done** ✅ — finished
 
-Tasks automatically advance through states, and the system auto-blocks tasks when their dependencies aren't complete.
+Tasks auto-block when their dependencies aren't complete.
+
+## Terminal Integration
+
+Link Ghostty terminal sessions to tasks. When you're juggling multiple terminals across different work streams, this lets you:
+
+- Associate terminals with specific tasks
+- Instantly focus the right terminal when switching contexts
+- See which terminals are linked to each task
+
+Click the link icon on a task to associate a terminal. Click the terminal icon to focus it. Uses Ghostty's native AppleScript API (no accessibility permissions needed).
 
 ## Development
 
-See [DEVELOPMENT.md](./DEVELOPMENT.md) for complete development guide including:
-- Architecture details
-- CSS variable system
-- Database schema
-- Adding new features
-- Common patterns
+See [DEVELOPMENT.md](./DEVELOPMENT.md) for architecture, database schema, and how to add features.
 
 ## Tech Stack
 
@@ -66,8 +65,8 @@ See [DEVELOPMENT.md](./DEVELOPMENT.md) for complete development guide including:
 
 ## Website
 
-The `/website` directory contains a landing page for distributing the app. See [website/README.md](./website/README.md) for deployment instructions to Cloudflare Pages.
+`/website` has a landing page for distribution. Deploys to Cloudflare Pages — see [website/README.md](./website/README.md).
 
 ## License
 
-Personal project - no license specified.
+Personal project. No license.

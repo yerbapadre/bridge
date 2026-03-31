@@ -324,12 +324,12 @@ fn list_ghostty_windows() -> Result<Vec<GhosttyWindow>, String> {
 
         let script = r#"
         tell application "Ghostty"
-            set windowList to {}
-            repeat with w in (every window)
-                set windowInfo to {id:(id of w as string), title:(name of w)}
-                set end of windowList to windowInfo
+            set terminalList to {}
+            repeat with t in (every terminal)
+                set terminalInfo to {id:(id of t as string), title:(name of t)}
+                set end of terminalList to terminalInfo
             end repeat
-            return windowList
+            return terminalList
         end tell
         "#;
 

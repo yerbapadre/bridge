@@ -137,6 +137,8 @@ export default function App() {
   const [editingProjectName, setEditingProjectName] = useState("");
   const [deleteConfirmProjectId, setDeleteConfirmProjectId] = useState<string | null>(null);
   const [deleteConfirmTaskCount, setDeleteConfirmTaskCount] = useState(0);
+  const [deleteConfirmTrackId, setDeleteConfirmTrackId] = useState<string | null>(null);
+  const [deleteConfirmTrackTaskCount, setDeleteConfirmTrackTaskCount] = useState(0);
   const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null);
 
   // Drag state for tracks
@@ -462,10 +464,19 @@ export default function App() {
     }
   };
 
-  const deleteTrack = async (trackId: string) => {
-    if (!confirm("Delete this track and all its tasks?")) return;
+  const startDeleteTrack = async (trackId: string) => {
+    const taskCount = tasks.filter(t => t.track_id === trackId).length;
+    setDeleteConfirmTrackId(trackId);
+    setDeleteConfirmTrackTaskCount(taskCount);
+  };
+
+  const confirmDeleteTrack = async () => {
+    if (!deleteConfirmTrackId) return;
+
     try {
-      await invoke("delete_track", { id: trackId });
+      await invoke("delete_track", { id: deleteConfirmTrackId });
+      setDeleteConfirmTrackId(null);
+      setDeleteConfirmTrackTaskCount(0);
       loadData();
     } catch (e) {
       setError(String(e));
@@ -824,17 +835,12 @@ export default function App() {
       >
         <div className={`p-4 border-b border-sidebar flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
           {!sidebarCollapsed && <h2 className="font-bold text-lg text-primary">Bridge</h2>}
-          <Tooltip>
-            <TooltipTrigger
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className={`text-tertiary hover:text-secondary transition-colors ${sidebarCollapsed ? 'text-xl' : 'text-sm'}`}
-            >
-              {sidebarCollapsed ? "→" : "←"}
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}</p>
-            </TooltipContent>
-          </Tooltip>
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className={`text-tertiary hover:text-secondary transition-colors ${sidebarCollapsed ? 'text-xl' : 'text-sm'}`}
+          >
+            {sidebarCollapsed ? "›" : "‹"}
+          </button>
         </div>
 
         {sidebarCollapsed ? (
@@ -1134,7 +1140,7 @@ export default function App() {
           <TrackColumn
             track={mainTrack}
             tasks={getTasksForTrack(mainTrack.id)}
-            onDeleteTrack={deleteTrack}
+            onDeleteTrack={startDeleteTrack}
             onCreateTask={createTask}
             onUpdateTaskStatus={updateTaskStatus}
             onDeleteTask={deleteTask}
@@ -1173,7 +1179,7 @@ export default function App() {
             key={track.id}
             track={track}
             tasks={getTasksForTrack(track.id)}
-            onDeleteTrack={deleteTrack}
+            onDeleteTrack={startDeleteTrack}
             onCreateTask={createTask}
             onUpdateTaskStatus={updateTaskStatus}
             onDeleteTask={deleteTask}
@@ -1337,6 +1343,57 @@ export default function App() {
                 className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-medium"
               >
                 Delete Project
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteConfirmTrackId && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => {
+            setDeleteConfirmTrackId(null);
+            setDeleteConfirmTrackTaskCount(0);
+          }}
+        >
+          <div
+            className="bg-secondary rounded-lg shadow-lg p-6 max-w-md w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-semibold mb-4 text-primary">Delete Track</h2>
+
+            {deleteConfirmTrackTaskCount > 0 ? (
+              <div>
+                <p className="text-secondary mb-4">
+                  This track contains <strong>{deleteConfirmTrackTaskCount}</strong> task{deleteConfirmTrackTaskCount !== 1 ? 's' : ''}.
+                  All tasks will be permanently deleted.
+                </p>
+                <p className="text-error text-sm mb-6">
+                  This action cannot be undone.
+                </p>
+              </div>
+            ) : (
+              <p className="text-secondary mb-6">
+                Are you sure you want to delete this track?
+              </p>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setDeleteConfirmTrackId(null);
+                  setDeleteConfirmTrackTaskCount(0);
+                }}
+                className="px-4 py-2 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteTrack}
+                className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-medium"
+              >
+                Delete Track
               </button>
             </div>
           </div>
@@ -3141,6 +3198,12 @@ function TrackColumn({
       draggable={canDragTrack}
       onDragStart={(e) => {
         console.log("Track onDragStart in component", track.id);
+        // Prevent drag if clicking on delete button
+        const target = e.target as HTMLElement;
+        if (target.closest('button[title="Delete track"]')) {
+          e.preventDefault();
+          return;
+        }
         if (canDragTrack && onTrackDragStart) {
           e.dataTransfer.effectAllowed = "move";
           e.dataTransfer.setData("text/plain", track.id);
@@ -3185,8 +3248,14 @@ function TrackColumn({
         </div>
         {track.type !== "main" && (
           <button
-            onClick={() => onDeleteTrack(track.id)}
-            className="text-tertiary hover:text-error text-sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteTrack(track.id);
+            }}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+            }}
+            className="text-tertiary hover:text-error text-sm pointer-events-auto z-10 relative"
             title="Delete track"
             draggable="false"
           >
