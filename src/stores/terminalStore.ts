@@ -11,6 +11,12 @@ interface TerminalStore {
   loadAllTerminalSessions: () => Promise<void>;
   loadAvailableWindows: () => Promise<boolean>;
   linkTerminalWindow: (window: GhosttyWindow, taskId: string) => Promise<boolean>;
+  createNewTerminal: (
+    taskId: string,
+    taskTitle: string,
+    workingDirectory?: string,
+    initialCommand?: string
+  ) => Promise<TerminalSession | null>;
   focusTerminalSession: (session: TerminalSession) => Promise<void>;
   deleteTerminalSession: (sessionId: string, taskId: string) => Promise<void>;
   deleteTerminalSessionFromAllView: (sessionId: string) => Promise<void>;
@@ -68,6 +74,27 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     } catch (e) {
       set({ error: String(e) });
       return false;
+    }
+  },
+
+  createNewTerminal: async (
+    taskId: string,
+    taskTitle: string,
+    workingDirectory?: string,
+    initialCommand?: string
+  ) => {
+    try {
+      const session = await api.createGhosttyWindow({
+        task_id: taskId,
+        task_title: taskTitle,
+        working_directory: workingDirectory,
+        initial_command: initialCommand,
+      });
+      await get().loadTerminalSessions(taskId);
+      return session;
+    } catch (e) {
+      set({ error: String(e) });
+      return null;
     }
   },
 

@@ -34,6 +34,13 @@ export async function updateProject(
   return invoke("update_project", { id, name, description, color });
 }
 
+export async function updateProjectRootPath(
+  id: string,
+  rootPath: string | null
+): Promise<void> {
+  return invoke("update_project_root_path", { id, rootPath });
+}
+
 export async function deleteProject(id: string): Promise<void> {
   return invoke("delete_project", { id });
 }
@@ -119,12 +126,12 @@ export async function addDependency(
 }
 
 // Focus & Timer
-export async function getFocusTask(): Promise<Task | null> {
-  return invoke<Task | null>("get_focus_task");
+export async function getFocusTask(projectId: string): Promise<Task | null> {
+  return invoke<Task | null>("get_focus_task", { projectId });
 }
 
-export async function setFocusTask(taskId: string): Promise<Task> {
-  return invoke<Task>("set_focus_task", { taskId });
+export async function setFocusTask(projectId: string, taskId: string): Promise<Task> {
+  return invoke<Task>("set_focus_task", { projectId, taskId });
 }
 
 export async function getActiveTimer(): Promise<ActiveTimer | null> {
@@ -174,6 +181,15 @@ export async function listGhosttyWindows(): Promise<GhosttyWindow[]> {
 
 export async function focusGhosttyWindow(windowTitle: string): Promise<void> {
   return invoke("focus_ghostty_window", { windowTitle });
+}
+
+export async function createGhosttyWindow(input: {
+  task_id: string;
+  task_title: string;
+  working_directory?: string;
+  initial_command?: string;
+}): Promise<TerminalSession> {
+  return invoke<TerminalSession>("create_ghostty_window", { input });
 }
 
 // Preferences & Themes

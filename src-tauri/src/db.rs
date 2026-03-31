@@ -16,6 +16,8 @@ pub struct Project {
     pub name: String,
     pub description: Option<String>,
     pub color: Option<String>,
+    pub root_path: Option<String>,
+    pub focused_task_id: Option<String>,
     pub position: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -145,12 +147,47 @@ impl Database {
                 name TEXT NOT NULL,
                 description TEXT,
                 color TEXT,
+                root_path TEXT,
                 position INTEGER NOT NULL,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             )",
             [],
         )?;
+
+        // Migration: Add root_path column if it doesn't exist
+        let has_root_path_col: bool = conn
+            .prepare("PRAGMA table_info(projects)")?
+            .query_map([], |row| {
+                let name: String = row.get(1)?;
+                Ok(name)
+            })?
+            .filter_map(Result::ok)
+            .any(|name| name == "root_path");
+
+        if !has_root_path_col {
+            conn.execute(
+                "ALTER TABLE projects ADD COLUMN root_path TEXT",
+                [],
+            )?;
+        }
+
+        // Migration: Add focused_task_id column if it doesn't exist
+        let has_focused_task_col: bool = conn
+            .prepare("PRAGMA table_info(projects)")?
+            .query_map([], |row| {
+                let name: String = row.get(1)?;
+                Ok(name)
+            })?
+            .filter_map(Result::ok)
+            .any(|name| name == "focused_task_id");
+
+        if !has_focused_task_col {
+            conn.execute(
+                "ALTER TABLE projects ADD COLUMN focused_task_id TEXT",
+                [],
+            )?;
+        }
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS tracks (
@@ -959,9 +996,9 @@ impl Database {
         let position = count as i32;
 
         conn.execute(
-            "INSERT INTO projects (id, name, description, color, position, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![id, input.name, input.description, input.color, position, now, now],
+            "INSERT INTO projects (id, name, description, color, root_path, focused_task_id, position, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![id, input.name, input.description, input.color, None::<String>, None::<String>, position, now, now],
         )?;
 
         Ok(Project {
@@ -969,6 +1006,8 @@ impl Database {
             name: input.name,
             description: input.description,
             color: input.color,
+            root_path: None,
+            focused_task_id: None,
             position,
             created_at: now,
             updated_at: now,
@@ -978,7 +1017,7 @@ impl Database {
     pub fn get_projects(&self) -> Result<Vec<Project>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, color, position, created_at, updated_at
+            "SELECT id, name, description, color, root_path, focused_task_id, position, created_at, updated_at
              FROM projects ORDER BY position",
         )?;
 
@@ -989,9 +1028,11 @@ impl Database {
                     name: row.get(1)?,
                     description: row.get(2)?,
                     color: row.get(3)?,
-                    position: row.get(4)?,
-                    created_at: row.get(5)?,
-                    updated_at: row.get(6)?,
+                    root_path: row.get(4)?,
+                    focused_task_id: row.get(5)?,
+                    position: row.get(6)?,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -1009,7 +1050,7 @@ impl Database {
         )?;
 
         let project = conn.query_row(
-            "SELECT id, name, description, color, position, created_at, updated_at FROM projects WHERE id = ?1",
+            "SELECT id, name, description, color, root_path, focused_task_id, position, created_at, updated_at FROM projects WHERE id = ?1",
             params![id],
             |row| {
                 Ok(Project {
@@ -1017,9 +1058,11 @@ impl Database {
                     name: row.get(1)?,
                     description: row.get(2)?,
                     color: row.get(3)?,
-                    position: row.get(4)?,
-                    created_at: row.get(5)?,
-                    updated_at: row.get(6)?,
+                    root_path: row.get(4)?,
+                    focused_task_id: row.get(5)?,
+                    position: row.get(6)?,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
                 })
             },
         )?;
@@ -1036,6 +1079,18 @@ impl Database {
             |row| row.get(0),
         )?;
         Ok(count)
+    }
+
+    pub fn update_project_root_path(&self, id: &str, root_path: Option<String>) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp();
+
+        conn.execute(
+            "UPDATE projects SET root_path = ?1, updated_at = ?2 WHERE id = ?3",
+            params![root_path, now, id],
+        )?;
+
+        Ok(())
     }
 
     pub fn delete_project(&self, id: &str) -> Result<()> {
@@ -1314,20 +1369,17 @@ impl Database {
     }
 
     // Focus and Timer Management
-    pub fn set_focus_task(&self, task_id: &str) -> Result<Task> {
+    pub fn set_focus_task(&self, project_id: &str, task_id: &str) -> Result<Task> {
         let conn = self.conn.lock().unwrap();
         let now = chrono::Utc::now().timestamp();
 
-        // Clear current focus from all tasks
-        conn.execute("UPDATE tasks SET is_current_focus = 0", [])?;
-
-        // Set focus on the specified task
+        // Update the project's focused_task_id
         conn.execute(
-            "UPDATE tasks SET is_current_focus = 1, updated_at = ?1 WHERE id = ?2",
-            params![now, task_id],
+            "UPDATE projects SET focused_task_id = ?1, updated_at = ?2 WHERE id = ?3",
+            params![task_id, now, project_id],
         )?;
 
-        // Get and return the updated task
+        // Get and return the task
         let task = conn.query_row(
             "SELECT id, track_id, title, description, status, position, parent_task_id, depth,
              created_at, updated_at, completed_at, is_current_focus
@@ -1346,7 +1398,7 @@ impl Database {
                     created_at: row.get(8)?,
                     updated_at: row.get(9)?,
                     completed_at: row.get(10)?,
-                    is_current_focus: row.get::<_, i32>(11)? != 0,
+                    is_current_focus: false, // No longer using this field
                 })
             },
         )?;
@@ -1354,42 +1406,60 @@ impl Database {
         Ok(task)
     }
 
-    pub fn clear_focus(&self) -> Result<()> {
+    pub fn clear_focus(&self, project_id: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        conn.execute("UPDATE tasks SET is_current_focus = 0", [])?;
+        let now = chrono::Utc::now().timestamp();
+        conn.execute(
+            "UPDATE projects SET focused_task_id = NULL, updated_at = ?1 WHERE id = ?2",
+            params![now, project_id],
+        )?;
         Ok(())
     }
 
-    pub fn get_focus_task(&self) -> Result<Option<Task>> {
+    pub fn get_focus_task(&self, project_id: &str) -> Result<Option<Task>> {
         let conn = self.conn.lock().unwrap();
 
-        let task = conn.query_row(
-            "SELECT id, track_id, title, description, status, position, parent_task_id, depth,
-             created_at, updated_at, completed_at, is_current_focus
-             FROM tasks WHERE is_current_focus = 1 LIMIT 1",
-            [],
-            |row| {
-                Ok(Task {
-                    id: row.get(0)?,
-                    track_id: row.get(1)?,
-                    title: row.get(2)?,
-                    description: row.get(3)?,
-                    status: row.get(4)?,
-                    position: row.get(5)?,
-                    parent_task_id: row.get(6)?,
-                    depth: row.get(7)?,
-                    created_at: row.get(8)?,
-                    updated_at: row.get(9)?,
-                    completed_at: row.get(10)?,
-                    is_current_focus: row.get::<_, i32>(11)? != 0,
-                })
-            },
-        );
+        // Get the focused task ID from the project
+        let focused_task_id: Option<String> = conn
+            .query_row(
+                "SELECT focused_task_id FROM projects WHERE id = ?1",
+                params![project_id],
+                |row| row.get(0),
+            )
+            .ok()
+            .flatten();
 
-        match task {
-            Ok(t) => Ok(Some(t)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(e),
+        if let Some(task_id) = focused_task_id {
+            let task = conn.query_row(
+                "SELECT id, track_id, title, description, status, position, parent_task_id, depth,
+                 created_at, updated_at, completed_at, is_current_focus
+                 FROM tasks WHERE id = ?1",
+                params![task_id],
+                |row| {
+                    Ok(Task {
+                        id: row.get(0)?,
+                        track_id: row.get(1)?,
+                        title: row.get(2)?,
+                        description: row.get(3)?,
+                        status: row.get(4)?,
+                        position: row.get(5)?,
+                        parent_task_id: row.get(6)?,
+                        depth: row.get(7)?,
+                        created_at: row.get(8)?,
+                        updated_at: row.get(9)?,
+                        completed_at: row.get(10)?,
+                        is_current_focus: false, // No longer using this field
+                    })
+                },
+            );
+
+            match task {
+                Ok(t) => Ok(Some(t)),
+                Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                Err(e) => Err(e),
+            }
+        } else {
+            Ok(None)
         }
     }
 

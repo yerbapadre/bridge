@@ -21,8 +21,6 @@ interface TaskStore {
   hasSubtasks: (taskId: string) => boolean;
   advanceTaskStatus: (taskId: string, currentStatus: Task["status"], currentProjectId: string) => Promise<void>;
   setError: (error: string | null) => void;
-  mainTrack: () => Track | undefined;
-  sideTracks: () => Track[];
 }
 
 const getNextStatus = (currentStatus: Task["status"]): Task["status"] | null => {
@@ -50,11 +48,19 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     if (!currentProjectId) return;
 
     try {
-      const [tracksData, tasksData, dependenciesData] = await Promise.all([
+      const [tracksData, allTasks, allDependencies] = await Promise.all([
         api.getTracks(currentProjectId),
         api.getTasks(null),
         api.getDependencies(null),
       ]);
+
+      // Filter tasks to only those belonging to tracks in this project
+      const trackIds = new Set(tracksData.map(t => t.id));
+      const tasksData = allTasks.filter(task => trackIds.has(task.track_id));
+      const taskIds = new Set(tasksData.map(t => t.id));
+      const dependenciesData = allDependencies.filter(dep =>
+        taskIds.has(dep.task_id) && taskIds.has(dep.blocks_task_id)
+      );
 
       set({
         tracks: tracksData,
@@ -200,14 +206,4 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   },
 
   setError: (error: string | null) => set({ error }),
-
-  mainTrack: () => {
-    const { tracks } = get();
-    return tracks.find((t) => t.type === "main");
-  },
-
-  sideTracks: () => {
-    const { tracks } = get();
-    return tracks.filter((t) => t.type === "side");
-  },
 }));

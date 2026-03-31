@@ -14,6 +14,7 @@ interface ActiveViewProps {
   resumeTimer: () => void;
   terminalSessions: TerminalSession[];
   openLinkTerminalModal: () => void;
+  openCreateTerminalModal: () => void;
   focusTerminalSession: (session: TerminalSession) => void;
   deleteTerminalSession: (sessionId: string) => void;
 }
@@ -32,6 +33,7 @@ function ActiveView({
   resumeTimer,
   terminalSessions,
   openLinkTerminalModal,
+  openCreateTerminalModal,
   focusTerminalSession,
   deleteTerminalSession,
 }: ActiveViewProps) {
@@ -139,12 +141,20 @@ function ActiveView({
                 <div className="text-xs font-semibold text-tertiary uppercase">
                   Terminal Sessions
                 </div>
-                <button
-                  onClick={openLinkTerminalModal}
-                  className="text-xs px-2 py-1 bg-accent rounded text-white hover:bg-accent-hover"
-                >
-                  + Link
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={openCreateTerminalModal}
+                    className="text-xs px-2 py-1 bg-accent rounded text-white hover:bg-accent-hover"
+                  >
+                    + Create
+                  </button>
+                  <button
+                    onClick={openLinkTerminalModal}
+                    className="text-xs px-2 py-1 bg-button-secondary hover:bg-button-secondary-hover rounded text-secondary"
+                  >
+                    Link
+                  </button>
+                </div>
               </div>
 
               {terminalSessions.length === 0 ? (

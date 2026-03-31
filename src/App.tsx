@@ -61,6 +61,7 @@ export default function App() {
   const availableWindows = useTerminalStore(state => state.availableWindows);
   const loadAvailableWindows = useTerminalStore(state => state.loadAvailableWindows);
   const linkTerminalWindow = useTerminalStore(state => state.linkTerminalWindow);
+  const createNewTerminal = useTerminalStore(state => state.createNewTerminal);
   const focusTerminalSession = useTerminalStore(state => state.focusTerminalSession);
   const deleteTerminalSession = useTerminalStore(state => state.deleteTerminalSession);
   const deleteTerminalSessionFromAllView = useTerminalStore(state => state.deleteTerminalSessionFromAllView);
@@ -71,25 +72,42 @@ export default function App() {
   const mainTrack = tracks.find(t => t.type === 'main');
   const sideTracks = tracks.filter(t => t.type === 'side');
 
+  // Filter terminal sessions to only those for tasks in the current project
+  const taskIds = new Set(tasks.map(t => t.id));
+  const projectTerminalSessions = allTerminalSessions.filter(session =>
+    taskIds.has(session.task_id)
+  );
+
   // Load initial data
   useEffect(() => {
     const loadProjects = useProjectStore.getState().loadProjects;
-    const loadFocusAndTimer = useFocusStore.getState().loadFocusAndTimer;
+    const loadAllTerminalSessions = useTerminalStore.getState().loadAllTerminalSessions;
     loadProjects();
-    loadFocusAndTimer();
+    loadAllTerminalSessions();
   }, []);
 
-  // Load tasks when project changes
+  // Load tasks and focus when project changes
   useEffect(() => {
     if (currentProjectId) {
       loadTaskData(currentProjectId);
+      const loadFocusAndTimer = useFocusStore.getState().loadFocusAndTimer;
+      loadFocusAndTimer(currentProjectId);
     }
-  }, [currentProjectId, loadTaskData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProjectId]);
 
   // Sync focus task when tasks change
   useEffect(() => {
     syncFocusFromTasks(tasks);
   }, [tasks, syncFocusFromTasks]);
+
+  // Load terminal sessions for the current focus task
+  useEffect(() => {
+    const loadTerminalSessions = useTerminalStore.getState().loadTerminalSessions;
+    if (focusTask) {
+      loadTerminalSessions(focusTask.id);
+    }
+  }, [focusTask]);
 
   const [currentView, setCurrentView] = useState<"board" | "active" | "retro" | "terminals" | "settings">("active");
   const [deleteConfirmProjectId, setDeleteConfirmProjectId] = useState<string | null>(null);
@@ -98,6 +116,11 @@ export default function App() {
   const [deleteConfirmTrackTaskCount, setDeleteConfirmTrackTaskCount] = useState(0);
   const [blockModalTaskId, setBlockModalTaskId] = useState<string | null>(null);
   const [showLinkTerminalModal, setShowLinkTerminalModal] = useState(false);
+  const [showCreateTerminalModal, setShowCreateTerminalModal] = useState(false);
+  const [createTerminalTaskId, setCreateTerminalTaskId] = useState<string | null>(null);
+  const [newTerminalWorkingDir, setNewTerminalWorkingDir] = useState("");
+  const [newTerminalInitialCmd, setNewTerminalInitialCmd] = useState("");
+  const [saveAsProjectRoot, setSaveAsProjectRoot] = useState(false);
 
   const error = projectsError || tasksError || focusError || terminalsError;
   const setError = (e: string | null) => {
@@ -184,11 +207,51 @@ export default function App() {
     setShowLinkTerminalModal(false);
   };
 
-  const handleSwitchFocusTask = async (taskId: string) => {
-    await switchFocusTask(taskId);
-    if (currentProjectId) {
-      await loadTaskData(currentProjectId);
+  const handleOpenCreateTerminalModal = () => {
+    if (!focusTask) return;
+    setCreateTerminalTaskId(focusTask.id);
+    setShowCreateTerminalModal(true);
+  };
+
+  const handleCreateTerminal = async () => {
+    if (!createTerminalTaskId) return;
+
+    const task = tasks.find(t => t.id === createTerminalTaskId);
+    if (!task) return;
+
+    const session = await createNewTerminal(
+      createTerminalTaskId,
+      task.title,
+      newTerminalWorkingDir || undefined,
+      newTerminalInitialCmd || undefined
+    );
+
+    if (session && saveAsProjectRoot && newTerminalWorkingDir) {
+      // Find the track to get the project_id
+      const track = tracks.find(t => t.id === task.track_id);
+      if (track) {
+        try {
+          const { updateProjectRootPath } = await import("@/lib/api");
+          await updateProjectRootPath(track.project_id, newTerminalWorkingDir);
+        } catch (e) {
+          console.error("Failed to update project root path:", e);
+        }
+      }
     }
+
+    if (session) {
+      setShowCreateTerminalModal(false);
+      setNewTerminalWorkingDir("");
+      setNewTerminalInitialCmd("");
+      setSaveAsProjectRoot(false);
+      setCreateTerminalTaskId(null);
+    }
+  };
+
+  const handleSwitchFocusTask = async (taskId: string) => {
+    if (!currentProjectId) return;
+    await switchFocusTask(currentProjectId, taskId);
+    await loadTaskData(currentProjectId);
   };
 
   // Wrapper functions to inject currentProjectId
@@ -332,7 +395,7 @@ export default function App() {
           <TerminalsView
             tasks={tasks}
             tracks={tracks}
-            terminalSessions={allTerminalSessions}
+            terminalSessions={projectTerminalSessions}
             openLinkTerminalModal={handleOpenLinkTerminalModal}
             focusTerminalSession={focusTerminalSession}
             deleteTerminalSession={deleteTerminalSessionFromAllView}
@@ -371,6 +434,7 @@ export default function App() {
             resumeTimer={resumeTimer}
             terminalSessions={terminalSessions}
             openLinkTerminalModal={handleOpenLinkTerminalModal}
+            openCreateTerminalModal={handleOpenCreateTerminalModal}
             focusTerminalSession={focusTerminalSession}
             deleteTerminalSession={(sessionId) => focusTask && deleteTerminalSession(sessionId, focusTask.id)}
           />
@@ -430,6 +494,109 @@ export default function App() {
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {showCreateTerminalModal && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => {
+            setShowCreateTerminalModal(false);
+            setNewTerminalWorkingDir("");
+            setNewTerminalInitialCmd("");
+            setCreateTerminalTaskId(null);
+          }}
+        >
+          <div
+            className="bg-tertiary rounded-lg p-6 max-w-md w-full mx-4 border border-border-primary"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-primary mb-4">
+              Create New Terminal
+              {createTerminalTaskId && tasks.find(t => t.id === createTerminalTaskId) && (
+                <span className="text-sm font-normal text-secondary ml-2">
+                  for {tasks.find(t => t.id === createTerminalTaskId)?.title}
+                </span>
+              )}
+            </h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">
+                  Working Directory (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={newTerminalWorkingDir}
+                  onChange={(e) => setNewTerminalWorkingDir(e.target.value)}
+                  placeholder="/path/to/directory"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                  className="w-full px-3 py-2 rounded bg-input-bg border border-input-border text-primary focus:outline-none focus:border-accent-primary"
+                />
+                <p className="text-xs text-tertiary mt-1">
+                  Leave empty to use home directory
+                </p>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-secondary mb-2">
+                  <input
+                    type="checkbox"
+                    checked={saveAsProjectRoot}
+                    onChange={(e) => setSaveAsProjectRoot(e.target.checked)}
+                    className="w-4 h-4 rounded border-input-border bg-input-bg text-accent-primary focus:ring-accent-primary"
+                  />
+                  Save as project root path
+                </label>
+                <p className="text-xs text-tertiary">
+                  Use this directory as the default for new terminals in this project
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-secondary mb-1">
+                  Initial Command (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={newTerminalInitialCmd}
+                  onChange={(e) => setNewTerminalInitialCmd(e.target.value)}
+                  placeholder="npm run dev"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                  className="w-full px-3 py-2 rounded bg-input-bg border border-input-border text-primary focus:outline-none focus:border-accent-primary"
+                />
+                <p className="text-xs text-tertiary mt-1">
+                  Command to run when terminal opens
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleCreateTerminal}
+                className="flex-1 px-4 py-2 rounded bg-accent-primary hover:bg-accent-hover text-white font-medium"
+              >
+                Create & Link
+              </button>
+              <button
+                onClick={() => {
+                  setShowCreateTerminalModal(false);
+                  setNewTerminalWorkingDir("");
+                  setNewTerminalInitialCmd("");
+                  setCreateTerminalTaskId(null);
+                }}
+                className="px-4 py-2 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

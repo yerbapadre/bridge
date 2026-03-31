@@ -8,8 +8,8 @@ interface FocusStore {
   elapsedSeconds: number;
   timerInterval: number | null;
   error: string | null;
-  loadFocusAndTimer: () => Promise<void>;
-  switchFocusTask: (taskId: string) => Promise<void>;
+  loadFocusAndTimer: (projectId: string) => Promise<void>;
+  switchFocusTask: (projectId: string, taskId: string) => Promise<void>;
   stopCurrentTimer: () => Promise<void>;
   resumeTimer: () => Promise<void>;
   syncFocusFromTasks: (tasks: Task[]) => void;
@@ -23,10 +23,17 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
   timerInterval: null,
   error: null,
 
-  loadFocusAndTimer: async () => {
+  loadFocusAndTimer: async (projectId: string) => {
+    // Clear any existing interval first to prevent duplicates
+    const { timerInterval } = get();
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      set({ timerInterval: null });
+    }
+
     try {
       const [focusTaskData, activeTimerData] = await Promise.all([
-        api.getFocusTask(),
+        api.getFocusTask(projectId),
         api.getActiveTimer(),
       ]);
 
@@ -34,15 +41,14 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
 
       if (focusTaskData) {
         updates.focusTask = focusTaskData;
+      } else {
+        updates.focusTask = null;
       }
 
       if (activeTimerData) {
         updates.activeTimer = activeTimerData;
         const now = Math.floor(Date.now() / 1000);
         updates.elapsedSeconds = now - activeTimerData.started_at;
-
-        const { timerInterval } = get();
-        if (timerInterval) clearInterval(timerInterval);
 
         const id = window.setInterval(() => {
           set((state) => ({ elapsedSeconds: state.elapsedSeconds + 1 }));
@@ -57,7 +63,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
     }
   },
 
-  switchFocusTask: async (taskId: string) => {
+  switchFocusTask: async (projectId: string, taskId: string) => {
     const { activeTimer, focusTask, timerInterval } = get();
 
     try {
@@ -69,7 +75,7 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
         }
       }
 
-      const newFocusTask = await api.setFocusTask(taskId);
+      const newFocusTask = await api.setFocusTask(projectId, taskId);
       const newTimer = await api.startTimer(taskId);
 
       const id = window.setInterval(() => {
@@ -136,9 +142,11 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
   },
 
   syncFocusFromTasks: (tasks: Task[]) => {
-    const currentFocus = tasks.find((t) => t.is_current_focus);
-    if (currentFocus) {
-      set({ focusTask: currentFocus });
+    const { focusTask } = get();
+
+    // Clear focus task if it's not in the current project's tasks
+    if (focusTask && !tasks.find((t) => t.id === focusTask.id)) {
+      set({ focusTask: null });
     }
   },
 

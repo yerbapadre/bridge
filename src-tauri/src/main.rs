@@ -13,6 +13,14 @@ struct AppState {
     prefs: Arc<Mutex<UserPreferences>>,
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct CreateGhosttyWindowInput {
+    task_id: String,
+    task_title: String,
+    working_directory: Option<String>,
+    initial_command: Option<String>,
+}
+
 #[tauri::command]
 fn create_track(
     state: State<AppState>,
@@ -121,6 +129,15 @@ fn update_project(
 }
 
 #[tauri::command]
+fn update_project_root_path(
+    state: State<AppState>,
+    id: String,
+    root_path: Option<String>,
+) -> Result<(), String> {
+    state.db.update_project_root_path(&id, root_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn get_project_task_count(state: State<AppState>, project_id: String) -> Result<i32, String> {
     state.db.get_project_task_count(&project_id).map_err(|e| e.to_string())
 }
@@ -191,18 +208,18 @@ fn reorder_tasks(
 }
 
 #[tauri::command]
-fn set_focus_task(state: State<AppState>, task_id: String) -> Result<db::Task, String> {
-    state.db.set_focus_task(&task_id).map_err(|e| e.to_string())
+fn set_focus_task(state: State<AppState>, project_id: String, task_id: String) -> Result<db::Task, String> {
+    state.db.set_focus_task(&project_id, &task_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn clear_focus(state: State<AppState>) -> Result<(), String> {
-    state.db.clear_focus().map_err(|e| e.to_string())
+fn clear_focus(state: State<AppState>, project_id: String) -> Result<(), String> {
+    state.db.clear_focus(&project_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn get_focus_task(state: State<AppState>) -> Result<Option<db::Task>, String> {
-    state.db.get_focus_task().map_err(|e| e.to_string())
+fn get_focus_task(state: State<AppState>, project_id: String) -> Result<Option<db::Task>, String> {
+    state.db.get_focus_task(&project_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -324,10 +341,15 @@ fn list_ghostty_windows() -> Result<Vec<GhosttyWindow>, String> {
 
         let script = r#"
         tell application "Ghostty"
-            set terminalList to {}
+            set terminalList to ""
+            set first_item to true
             repeat with t in (every terminal)
-                set terminalInfo to {id:(id of t as string), title:(name of t)}
-                set end of terminalList to terminalInfo
+                if first_item then
+                    set first_item to false
+                else
+                    set terminalList to terminalList & ", "
+                end if
+                set terminalList to terminalList & "id:" & (id of t as string) & ", title:" & (name of t)
             end repeat
             return terminalList
         end tell
@@ -377,6 +399,106 @@ fn list_ghostty_windows() -> Result<Vec<GhosttyWindow>, String> {
     }
 }
 
+#[tauri::command]
+fn create_ghostty_window(
+    state: State<AppState>,
+    input: CreateGhosttyWindowInput,
+) -> Result<TerminalSession, String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        // Default to home directory if none specified
+        let working_dir = input.working_directory
+            .unwrap_or_else(|| std::env::var("HOME").unwrap_or_else(|_| "/".to_string()));
+
+        // Escape values for AppleScript
+        let escaped_dir = escape_applescript_string(&working_dir);
+        let escaped_title = escape_applescript_string(&input.task_title);
+
+        // Build configuration (just working directory, no command)
+        let config_lines = vec![
+            "set cfg to new surface configuration".to_string(),
+            format!("set initial working directory of cfg to \"{}\"", escaped_dir),
+        ];
+
+        // Prepare command to send after window opens (if provided)
+        let command_script = if let Some(cmd) = &input.initial_command {
+            let escaped_cmd = escape_applescript_string(cmd);
+            format!(
+                "                -- Send the command to the terminal\n\
+                                 input text \"{}\" to newTerm\n\
+                                 send key \"enter\" to newTerm",
+                escaped_cmd
+            )
+        } else {
+            String::new()
+        };
+
+        // Build full AppleScript
+        let script = format!(
+            r#"
+            tell application "Ghostty"
+                {}
+                set win to new window with configuration cfg
+
+                -- Get the new terminal's info
+                set newTerm to focused terminal of selected tab of win
+                set termId to id of newTerm as string
+                set termTitle to name of newTerm
+
+                {}
+
+                return "id:" & termId & ", title:" & termTitle
+            end tell
+            "#,
+            config_lines.join("\n                "),
+            command_script
+        );
+
+        // Execute AppleScript
+        let output = Command::new("osascript")
+            .arg("-e")
+            .arg(&script)
+            .output()
+            .map_err(|e| format!("Failed to execute AppleScript: {}", e))?;
+
+        if !output.status.success() {
+            return Err(format!("AppleScript failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        // Parse response: "id:UUID, title:Title"
+        let result = String::from_utf8_lossy(&output.stdout);
+        let parts: Vec<&str> = result.trim().split(", ").collect();
+
+        let terminal_uuid = parts.get(0)
+            .and_then(|s| s.strip_prefix("id:"))
+            .unwrap_or("")
+            .to_string();
+
+        let window_title = parts.get(1)
+            .and_then(|s| s.strip_prefix("title:"))
+            .unwrap_or(&escaped_title)
+            .to_string();
+
+        // Create terminal session record
+        let session = state.db.create_terminal_session(CreateTerminalSessionInput {
+            task_id: input.task_id,
+            terminal_app: "ghostty".to_string(),
+            terminal_uuid: Some(terminal_uuid),
+            window_title: Some(window_title),
+            working_dir: Some(working_dir),
+        }).map_err(|e| e.to_string())?;
+
+        Ok(session)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Ghostty AppleScript is only supported on macOS".to_string())
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
@@ -405,6 +527,7 @@ fn main() {
             create_project,
             get_projects,
             update_project,
+            update_project_root_path,
             get_project_task_count,
             delete_project,
             create_track,
@@ -441,6 +564,7 @@ fn main() {
             delete_terminal_session,
             focus_ghostty_window,
             list_ghostty_windows,
+            create_ghostty_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
