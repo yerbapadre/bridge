@@ -20,7 +20,7 @@ export default function TerminalTyping() {
   }
 
   useEffect(() => {
-    let timeout: NodeJS.Timeout
+    let timeout: number
 
     if (phase === 'blink1') {
       // First blink phase - blink cursor twice
