@@ -1,0 +1,28 @@
+{
+  "name": "Modern Dark",
+  "colors": {
+    "status_blocked": "239 68 68",
+    "status_ready": "96 165 250",
+    "status_in_progress": "34 197 94",
+    "status_done": "163 163 163",
+    "bg_primary": "15 23 42",
+    "bg_secondary": "30 41 59",
+    "bg_tertiary": "51 65 85",
+    "bg_quaternary": "71 85 105",
+    "text_primary": "248 250 252",
+    "text_secondary": "203 213 225",
+    "text_tertiary": "148 163 184",
+    "text_quaternary": "100 116 139",
+    "border_primary": "51 65 85",
+    "border_secondary": "71 85 105",
+    "accent_primary": "14 165 233",
+    "accent_hover": "2 132 199",
+    "accent_star": "251 191 36",
+    "sidebar_bg": "15 23 42",
+    "sidebar_border": "51 65 85",
+    "input_bg": "30 41 59",
+    "input_border": "71 85 105",
+    "button_secondary": "51 65 85",
+    "button_secondary_hover": "71 85 105"
+  }
+}

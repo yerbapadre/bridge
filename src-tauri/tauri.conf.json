@@ -15,7 +15,8 @@
         "title": "Bridge",
         "width": 900,
         "height": 700,
-        "resizable": true
+        "resizable": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {

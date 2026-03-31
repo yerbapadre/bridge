@@ -2,7 +2,7 @@
 
 mod db;
 
-use db::{CreateProjectInput, CreateTaskInput, CreateTrackInput, Database, UpdateTaskInput, UserPreferences};
+use db::{ActiveTimer, CreateProjectInput, CreateTaskInput, CreateTerminalSessionInput, CreateThemeInput, CreateTrackInput, Database, TerminalSession, TimeLog, UpdateTaskInput, UserPreferences};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::{Manager, State};
@@ -121,6 +121,11 @@ fn update_project(
 }
 
 #[tauri::command]
+fn get_project_task_count(state: State<AppState>, project_id: String) -> Result<i32, String> {
+    state.db.get_project_task_count(&project_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn delete_project(state: State<AppState>, id: String) -> Result<(), String> {
     state.db.delete_project(&id).map_err(|e| e.to_string())
 }
@@ -144,6 +149,219 @@ fn save_preferences_command(
     // Save to file
     db::save_preferences(&state.prefs_path, &prefs)
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_theme(
+    state: State<AppState>,
+    input: CreateThemeInput,
+) -> Result<db::SavedTheme, String> {
+    state.db.save_theme(input).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_themes(state: State<AppState>) -> Result<Vec<db::SavedTheme>, String> {
+    state.db.get_themes().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_theme(state: State<AppState>, id: String) -> Result<(), String> {
+    state.db.delete_theme(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn reorder_tracks(
+    state: State<AppState>,
+    project_id: String,
+    track_id: String,
+    new_position: i32,
+) -> Result<(), String> {
+    state.db.reorder_tracks(&project_id, &track_id, new_position)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn reorder_tasks(
+    state: State<AppState>,
+    task_id: String,
+    new_position: i32,
+) -> Result<(), String> {
+    state.db.reorder_tasks(&task_id, new_position)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_focus_task(state: State<AppState>, task_id: String) -> Result<db::Task, String> {
+    state.db.set_focus_task(&task_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn clear_focus(state: State<AppState>) -> Result<(), String> {
+    state.db.clear_focus().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_focus_task(state: State<AppState>) -> Result<Option<db::Task>, String> {
+    state.db.get_focus_task().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn start_timer(state: State<AppState>, task_id: String) -> Result<ActiveTimer, String> {
+    state.db.start_timer(&task_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn stop_timer(state: State<AppState>, task_id: String) -> Result<Option<TimeLog>, String> {
+    state.db.stop_timer(&task_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_active_timer(state: State<AppState>) -> Result<Option<ActiveTimer>, String> {
+    state.db.get_active_timer().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_time_logs(state: State<AppState>, task_id: String) -> Result<Vec<TimeLog>, String> {
+    state.db.get_time_logs(&task_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_total_time_for_task(state: State<AppState>, task_id: String) -> Result<i32, String> {
+    state.db.get_total_time_for_task(&task_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn create_terminal_session(
+    state: State<AppState>,
+    input: CreateTerminalSessionInput,
+) -> Result<TerminalSession, String> {
+    state.db.create_terminal_session(input).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_terminal_sessions(state: State<AppState>, task_id: String) -> Result<Vec<TerminalSession>, String> {
+    state.db.get_terminal_sessions(&task_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_terminal_session_focus(state: State<AppState>, id: String) -> Result<(), String> {
+    state.db.update_terminal_session_focus(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_terminal_session(state: State<AppState>, id: String) -> Result<(), String> {
+    state.db.delete_terminal_session(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn focus_ghostty_window(window_title: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        // Escape single quotes in the window title for AppleScript
+        let escaped_title = window_title.replace("'", "\\'");
+
+        let script = format!(
+            r#"
+            tell application "Ghostty"
+                activate
+                repeat with w in (every window)
+                    if name of w is "{}" then
+                        set index of w to 1
+                        return
+                    end if
+                end repeat
+            end tell
+            "#,
+            escaped_title
+        );
+
+        let output = Command::new("osascript")
+            .arg("-e")
+            .arg(&script)
+            .output()
+            .map_err(|e| format!("Failed to execute AppleScript: {}", e))?;
+
+        if !output.status.success() {
+            return Err(format!("AppleScript failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Ghostty AppleScript is only supported on macOS".to_string())
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+struct GhosttyWindow {
+    id: String,
+    title: String,
+    working_dir: Option<String>,
+}
+
+#[tauri::command]
+fn list_ghostty_windows() -> Result<Vec<GhosttyWindow>, String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        let script = r#"
+        tell application "Ghostty"
+            set windowList to {}
+            repeat with w in (every window)
+                set windowInfo to {id:(id of w as string), title:(name of w)}
+                set end of windowList to windowInfo
+            end repeat
+            return windowList
+        end tell
+        "#;
+
+        let output = Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .output()
+            .map_err(|e| format!("Failed to execute AppleScript: {}", e))?;
+
+        if !output.status.success() {
+            return Err(format!("AppleScript failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        let result = String::from_utf8_lossy(&output.stdout);
+
+        // Parse AppleScript output format: "id:123, title:Some Title, id:456, title:Another"
+        // This is a simple parser - in production you'd want more robust parsing
+        let mut windows = Vec::new();
+        let parts: Vec<&str> = result.trim().split(", ").collect();
+
+        let mut i = 0;
+        while i < parts.len() {
+            if let Some(id_part) = parts.get(i) {
+                if let Some(title_part) = parts.get(i + 1) {
+                    if let Some(id) = id_part.strip_prefix("id:") {
+                        if let Some(title) = title_part.strip_prefix("title:") {
+                            windows.push(GhosttyWindow {
+                                id: id.to_string(),
+                                title: title.to_string(),
+                                working_dir: None,
+                            });
+                        }
+                    }
+                }
+            }
+            i += 2;
+        }
+
+        Ok(windows)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Ghostty AppleScript is only supported on macOS".to_string())
+    }
 }
 
 fn main() {
@@ -174,21 +392,41 @@ fn main() {
             create_project,
             get_projects,
             update_project,
+            get_project_task_count,
             delete_project,
             create_track,
             get_tracks,
             update_track,
             delete_track,
+            reorder_tracks,
             create_task,
             get_tasks,
             update_task,
             delete_task,
+            reorder_tasks,
             add_dependency,
             get_dependencies,
             remove_dependency,
             auto_update_task_statuses,
             get_preferences,
             save_preferences_command,
+            save_theme,
+            get_themes,
+            delete_theme,
+            set_focus_task,
+            clear_focus,
+            get_focus_task,
+            start_timer,
+            stop_timer,
+            get_active_timer,
+            get_time_logs,
+            get_total_time_for_task,
+            create_terminal_session,
+            get_terminal_sessions,
+            update_terminal_session_focus,
+            delete_terminal_session,
+            focus_ghostty_window,
+            list_ghostty_windows,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
