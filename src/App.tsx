@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Project {
   id: string;
@@ -795,12 +796,19 @@ export default function App() {
       >
         <div className={`p-4 border-b border-sidebar flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
           {!sidebarCollapsed && <h2 className="font-bold text-lg text-primary">Bridge</h2>}
-          <button
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className={`text-tertiary hover:text-secondary transition-colors ${sidebarCollapsed ? 'text-xl' : 'text-sm'}`}
-          >
-            {sidebarCollapsed ? "→" : "←"}
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className={`text-tertiary hover:text-secondary transition-colors ${sidebarCollapsed ? 'text-xl' : 'text-sm'}`}
+              >
+                {sidebarCollapsed ? "→" : "←"}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         {sidebarCollapsed ? (
@@ -809,13 +817,20 @@ export default function App() {
           <div className="flex-1 overflow-y-auto">
             {/* Projects Section */}
             <div className="p-2">
-              <button
-                onClick={() => setProjectsExpanded(!projectsExpanded)}
-                className="w-full text-left px-3 py-2 text-xs font-semibold text-tertiary hover:text-secondary flex items-center justify-between"
-              >
-                <span>PROJECTS</span>
-                <span>{projectsExpanded ? "▼" : "▶"}</span>
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setProjectsExpanded(!projectsExpanded)}
+                    className="w-full text-left px-3 py-2 text-xs font-semibold text-tertiary hover:text-secondary flex items-center justify-between"
+                  >
+                    <span>PROJECTS</span>
+                    <span>{projectsExpanded ? "▼" : "▶"}</span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{projectsExpanded ? "Collapse projects" : "Expand projects"}</p>
+                </TooltipContent>
+              </Tooltip>
 
               {projectsExpanded && (
                 <div className="mt-1 ml-2">
@@ -1016,26 +1031,38 @@ export default function App() {
           <div className="bg-error border border-error rounded p-4 mb-6 flex items-start justify-between gap-4">
             <p className="text-sm text-primary flex-1">Error: {error}</p>
             <div className="flex gap-2 flex-shrink-0">
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(error);
-                }}
-                className="text-primary hover:opacity-70 transition-opacity"
-                title="Copy error message"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-              </button>
-              <button
-                onClick={() => setError(null)}
-                className="text-primary hover:opacity-70 transition-opacity"
-                title="Dismiss error"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(error);
+                    }}
+                    className="text-primary hover:opacity-70 transition-opacity"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Copy error message</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setError(null)}
+                    className="text-primary hover:opacity-70 transition-opacity"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Dismiss error</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         )}
@@ -1068,7 +1095,7 @@ export default function App() {
             </div>
           )}
 
-          <div className="flex gap-4 overflow-x-auto overflow-y-hidden pb-4 flex-1">
+          <div className="flex gap-4 overflow-x-auto overflow-y-visible pb-4 flex-1">
         {mainTrack && (
           <TrackColumn
             track={mainTrack}
@@ -1494,7 +1521,7 @@ function AppearanceSettings({}: AppearanceSettingsProps) {
                 <h3 className="text-lg font-semibold mb-3 text-primary pr-16">{theme.name}</h3>
 
                 {/* Color Preview */}
-                <div className="mb-4 grid grid-cols-6 gap-1 h-16 rounded overflow-hidden">
+                <div className="mb-4 grid grid-cols-3 grid-rows-2 gap-1 h-20 rounded overflow-hidden">
                   <div style={{ backgroundColor: `rgb(${theme.colors.bg_primary})` }} />
                   <div style={{ backgroundColor: `rgb(${theme.colors.accent_primary})` }} />
                   <div style={{ backgroundColor: `rgb(${theme.colors.status_in_progress})` }} />
@@ -2006,7 +2033,7 @@ function ActiveView({
                   </div>
                   <button
                     onClick={() => switchFocusTask(task.id)}
-                    className="px-3 py-1 rounded bg-accent text-sm font-medium whitespace-nowrap"
+                    className="px-3 py-1 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary text-sm font-medium whitespace-nowrap transition-colors"
                   >
                     Switch to This
                   </button>
@@ -2044,7 +2071,7 @@ function ActiveView({
                   </div>
                   <button
                     onClick={() => switchFocusTask(task.id)}
-                    className="px-3 py-1 rounded bg-accent text-sm font-medium whitespace-nowrap"
+                    className="px-3 py-1 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary text-sm font-medium whitespace-nowrap transition-colors"
                   >
                     Switch to This
                   </button>
@@ -2808,13 +2835,20 @@ function TrackColumn({
           <div className="flex items-start justify-between gap-2 mb-2">
             <div className="flex items-start gap-2 flex-1">
               {hasSubtasks(task.id) && (
-                <button
-                  onClick={() => toggleTaskCollapsed(task.id)}
-                  className="text-tertiary hover:text-secondary text-sm mt-0.5"
-                  draggable="false"
-                >
-                  {isCollapsed ? "▶" : "▼"}
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => toggleTaskCollapsed(task.id)}
+                      className="text-tertiary hover:text-secondary text-sm mt-0.5"
+                      draggable="false"
+                    >
+                      {isCollapsed ? "▶" : "▼"}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{isCollapsed ? "Show subtasks" : "Hide subtasks"}</p>
+                  </TooltipContent>
+                </Tooltip>
               )}
               <div className="flex-1">
                 <p className="text-sm font-medium leading-snug text-primary select-text">{task.title}</p>
@@ -2961,7 +2995,7 @@ function TrackColumn({
 
   return (
     <div
-      className={`bg-track rounded-lg border border-track flex flex-col h-fit min-w-[320px] w-[320px] transition-all select-none ${
+      className={`bg-track rounded-lg border border-track flex flex-col h-fit min-w-[320px] w-[320px] transition-all select-none overflow-visible ${
         canDragTrack ? (isDragging ? "opacity-50 cursor-grabbing" : "cursor-grab") : ""
       } ${isDragOver ? "ring-2 ring-accent border-accent" : ""}`}
       draggable={canDragTrack}
@@ -3021,7 +3055,7 @@ function TrackColumn({
         )}
       </div>
 
-      <div className="p-3 flex-1">
+      <div className="p-3 flex-1 overflow-visible">
         {tasks.map((task, index) => renderTask(task, index === 0))}
 
         {tasks.length === 0 && (

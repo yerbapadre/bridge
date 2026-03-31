@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import CellularAutomata from './CellularAutomata'
+import TerminalTyping from './TerminalTyping'
 
 const DOWNLOAD_URLS = {
   mac: 'https://github.com/YOUR_USERNAME/bridge/releases/latest/download/Bridge_universal.dmg',
@@ -18,9 +19,9 @@ function App() {
   const downloadUrl = DOWNLOAD_URLS[os]
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white relative">
+    <div className="h-screen overflow-hidden bg-slate-900 text-white relative flex flex-col">
       <CellularAutomata />
-      <nav className="border-b border-slate-700/50 backdrop-blur-sm relative z-10">
+      <nav className="border-b border-slate-700/50 backdrop-blur-sm relative z-10 flex-shrink-0">
         <div className="max-w-6xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
@@ -38,8 +39,8 @@ function App() {
         </div>
       </nav>
 
-      <main className="relative z-10">
-        <section className="max-w-6xl mx-auto px-6 py-20 md:py-32">
+      <main className="relative z-10 flex-1 flex items-center justify-center">
+        <section className="max-w-6xl mx-auto px-6">
           <div className="text-center max-w-4xl mx-auto">
             <h2 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
               Task Management for<br />Parallel Work Streams
@@ -98,43 +99,12 @@ function App() {
             </div>
           </div>
         </section>
-
-        <section className="max-w-6xl mx-auto px-6 py-20">
-          <div className="bg-gradient-to-r from-teal-500/10 to-cyan-500/10 border border-teal-500/20 rounded-2xl p-12 text-center">
-            <h3 className="text-3xl font-bold mb-4">
-              Your Data Stays Local
-            </h3>
-            <p className="text-xl text-slate-300 mb-8 max-w-2xl mx-auto">
-              Bridge stores everything in SQLite on your machine. No cloud sync, no tracking, no account required. Your tasks, your computer.
-            </p>
-            <div className="flex justify-center gap-8 text-sm text-slate-400">
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                No Subscription
-              </div>
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                No Tracking
-              </div>
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Open Source
-              </div>
-            </div>
-          </div>
-        </section>
       </main>
 
-      <footer className="border-t border-slate-700/50 mt-20 relative z-10">
+      <footer className="border-t border-slate-700/50 relative z-10 flex-shrink-0">
         <div className="max-w-6xl mx-auto px-6 py-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-slate-400 text-sm">
-            <p>Built with Tauri, React, and Rust</p>
+            <TerminalTyping />
             <div className="flex gap-6">
               <a href="https://github.com/YOUR_USERNAME/bridge" className="hover:text-white transition-colors">
                 GitHub

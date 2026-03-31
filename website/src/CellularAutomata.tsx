@@ -11,12 +11,14 @@ export default function CellularAutomata() {
     if (!ctx) return
 
     let animationFrameId: number
-    const CELL_SIZE = 8
+    const CELL_SIZE = 12
     let cols: number
     let rows: number
     let grid: number[][]
     let nextGrid: number[][]
     let generation = 0
+    let lastUpdate = 0
+    const UPDATE_INTERVAL = 100 // Update every 100ms for visible animation
 
     const resize = () => {
       canvas.width = window.innerWidth
@@ -32,11 +34,11 @@ export default function CellularAutomata() {
       const centerX = Math.floor(cols / 2)
       const centerY = Math.floor(rows / 2)
 
-      // Create an interesting starting pattern (glider gun-like)
+      // Create a better starting pattern - Acorn (grows for 5000+ generations)
       const pattern = [
-        [0, 1, 0],
-        [0, 0, 1],
-        [1, 1, 1],
+        [0, 1, 0, 0, 0, 0, 0],
+        [0, 0, 0, 1, 0, 0, 0],
+        [1, 1, 0, 0, 1, 1, 1],
       ]
 
       for (let i = 0; i < pattern.length; i++) {
@@ -45,19 +47,6 @@ export default function CellularAutomata() {
           const col = centerX - Math.floor(pattern[0].length / 2) + j
           if (row >= 0 && row < rows && col >= 0 && col < cols) {
             grid[row][col] = pattern[i][j]
-          }
-        }
-      }
-
-      // Add some random noise around the center
-      for (let i = -3; i <= 3; i++) {
-        for (let j = -3; j <= 3; j++) {
-          const row = centerY + i
-          const col = centerX + j
-          if (row >= 0 && row < rows && col >= 0 && col < cols) {
-            if (Math.random() > 0.7) {
-              grid[row][col] = 1
-            }
           }
         }
       }
@@ -171,30 +160,28 @@ export default function CellularAutomata() {
               b = Math.floor(241 + (247 - 241) * t)
             }
 
-            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.6)`
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.8)`
             ctx.fillRect(x, y, CELL_SIZE - 1, CELL_SIZE - 1)
 
             // Add glow effect
-            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.2)`
-            ctx.fillRect(x - 1, y - 1, CELL_SIZE + 1, CELL_SIZE + 1)
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.3)`
+            ctx.fillRect(x - 2, y - 2, CELL_SIZE + 3, CELL_SIZE + 3)
           }
         }
       }
     }
 
-    const animate = () => {
-      update()
+    const animate = (timestamp: number) => {
+      if (timestamp - lastUpdate > UPDATE_INTERVAL) {
+        update()
+        lastUpdate = timestamp
+      }
       draw()
       animationFrameId = requestAnimationFrame(animate)
     }
 
-    // Start with initial draw
-    draw()
-
-    // Start animation after a brief delay
-    setTimeout(() => {
-      animate()
-    }, 500)
+    // Start animation immediately
+    animationFrameId = requestAnimationFrame(animate)
 
     return () => {
       window.removeEventListener('resize', resize)
