@@ -19,7 +19,7 @@ function App() {
   const downloadUrl = DOWNLOAD_URLS[os]
 
   return (
-    <div className="h-screen overflow-hidden bg-slate-900 text-white relative flex flex-col">
+    <div className="h-screen overflow-hidden text-white relative flex flex-col">
       <CellularAutomata />
       <nav className="border-b border-slate-700/50 backdrop-blur-sm relative z-10 flex-shrink-0">
         <div className="max-w-6xl mx-auto px-6 py-4">

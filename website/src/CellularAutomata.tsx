@@ -11,14 +11,14 @@ export default function CellularAutomata() {
     if (!ctx) return
 
     let animationFrameId: number
-    const CELL_SIZE = 12
+    const CELL_SIZE = 4
     let cols: number
     let rows: number
     let grid: number[][]
     let nextGrid: number[][]
     let generation = 0
     let lastUpdate = 0
-    const UPDATE_INTERVAL = 100 // Update every 100ms for visible animation
+    const UPDATE_INTERVAL = 150 // Update every 150ms for visible animation
 
     const resize = () => {
       canvas.width = window.innerWidth
@@ -26,32 +26,50 @@ export default function CellularAutomata() {
       cols = Math.floor(canvas.width / CELL_SIZE)
       rows = Math.floor(canvas.height / CELL_SIZE)
 
+      console.log(`Canvas initialized: ${canvas.width}x${canvas.height}, Grid: ${cols}x${rows}`)
+
       // Initialize grids
       grid = Array(rows).fill(null).map(() => Array(cols).fill(0))
       nextGrid = Array(rows).fill(null).map(() => Array(cols).fill(0))
 
-      // Seed the center with a pattern
-      const centerX = Math.floor(cols / 2)
-      const centerY = Math.floor(rows / 2)
-
-      // Create a better starting pattern - Acorn (grows for 5000+ generations)
-      const pattern = [
-        [0, 1, 0, 0, 0, 0, 0],
-        [0, 0, 0, 1, 0, 0, 0],
-        [1, 1, 0, 0, 1, 1, 1],
+      // Seed patterns in different areas of the screen
+      const seedAreas = [
+        // Upper left
+        { baseX: Math.floor(cols * 0.2), baseY: Math.floor(rows * 0.2) },
+        // Middle right
+        { baseX: Math.floor(cols * 0.75), baseY: Math.floor(rows * 0.5) },
+        // Lower left
+        { baseX: Math.floor(cols * 0.25), baseY: Math.floor(rows * 0.75) },
       ]
 
-      for (let i = 0; i < pattern.length; i++) {
-        for (let j = 0; j < pattern[i].length; j++) {
-          const row = centerY - Math.floor(pattern.length / 2) + i
-          const col = centerX - Math.floor(pattern[0].length / 2) + j
-          if (row >= 0 && row < rows && col >= 0 && col < cols) {
-            grid[row][col] = pattern[i][j]
+      const patternTypes = [
+        // Acorn pattern
+        [[0, 1, 0, 0, 0, 0, 0], [0, 0, 0, 1, 0, 0, 0], [1, 1, 0, 0, 1, 1, 1]],
+        // Glider
+        [[0, 1, 0], [0, 0, 1], [1, 1, 1]],
+        // R-pentomino (very active)
+        [[0, 1, 1], [1, 1, 0], [0, 1, 0]],
+      ]
+
+      seedAreas.forEach((area, idx) => {
+        // Add some randomness to the position within the area
+        const randomX = Math.floor((Math.random() - 0.5) * 30)
+        const randomY = Math.floor((Math.random() - 0.5) * 30)
+        const pattern = patternTypes[idx % patternTypes.length]
+
+        for (let i = 0; i < pattern.length; i++) {
+          for (let j = 0; j < pattern[i].length; j++) {
+            const row = area.baseY + randomY - Math.floor(pattern.length / 2) + i
+            const col = area.baseX + randomX - Math.floor(pattern[0].length / 2) + j
+            if (row >= 0 && row < rows && col >= 0 && col < cols) {
+              grid[row][col] = pattern[i][j]
+            }
           }
         }
-      }
+      })
 
       generation = 0
+      lastUpdate = 0
     }
 
     resize()
@@ -99,14 +117,21 @@ export default function CellularAutomata() {
       [grid, nextGrid] = [nextGrid, grid]
       generation++
 
-      // Add occasional random seeds to keep it alive
-      if (generation % 50 === 0) {
-        const centerX = Math.floor(cols / 2) + (Math.random() - 0.5) * 20
-        const centerY = Math.floor(rows / 2) + (Math.random() - 0.5) * 20
+      // Add occasional random seeds to keep it alive in different areas
+      if (generation % 80 === 0) {
+        const areas = [
+          { x: cols * 0.2, y: rows * 0.2 },
+          { x: cols * 0.75, y: rows * 0.5 },
+          { x: cols * 0.25, y: rows * 0.75 },
+        ]
+        const area = areas[Math.floor(Math.random() * areas.length)]
+        const seedX = Math.floor(area.x + (Math.random() - 0.5) * 40)
+        const seedY = Math.floor(area.y + (Math.random() - 0.5) * 40)
+
         for (let i = -1; i <= 1; i++) {
           for (let j = -1; j <= 1; j++) {
-            const row = Math.floor(centerY + i)
-            const col = Math.floor(centerX + j)
+            const row = seedY + i
+            const col = seedX + j
             if (row >= 0 && row < rows && col >= 0 && col < cols) {
               if (Math.random() > 0.5) {
                 grid[row][col] = 1
@@ -123,9 +148,11 @@ export default function CellularAutomata() {
       ctx.fillRect(0, 0, canvas.width, canvas.height)
 
       // Draw cells
+      let cellCount = 0
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
           if (grid[row][col] === 1) {
+            cellCount++
             const x = col * CELL_SIZE
             const y = row * CELL_SIZE
 
@@ -138,36 +165,48 @@ export default function CellularAutomata() {
             const maxDistance = Math.sqrt(centerX * centerX + centerY * centerY)
             const distanceRatio = distance / maxDistance
 
-            // Color gradient from teal to cyan to purple
+            // Color gradient: teal → cyan → amber → indigo → purple
             let r, g, b
-            if (distanceRatio < 0.33) {
+            if (distanceRatio < 0.25) {
               // Teal to cyan
-              const t = distanceRatio / 0.33
+              const t = distanceRatio / 0.25
               r = Math.floor(20 + (34 - 20) * t)
               g = Math.floor(184 + (211 - 184) * t)
               b = Math.floor(166 + (238 - 166) * t)
-            } else if (distanceRatio < 0.66) {
-              // Cyan to indigo
-              const t = (distanceRatio - 0.33) / 0.33
-              r = Math.floor(34 + (99 - 34) * t)
-              g = Math.floor(211 + (102 - 211) * t)
-              b = Math.floor(238 + (241 - 238) * t)
+            } else if (distanceRatio < 0.5) {
+              // Cyan to amber/orange
+              const t = (distanceRatio - 0.25) / 0.25
+              r = Math.floor(34 + (251 - 34) * t)
+              g = Math.floor(211 + (191 - 211) * t)
+              b = Math.floor(238 + (36 - 238) * t)
+            } else if (distanceRatio < 0.75) {
+              // Amber to indigo
+              const t = (distanceRatio - 0.5) / 0.25
+              r = Math.floor(251 + (99 - 251) * t)
+              g = Math.floor(191 + (102 - 191) * t)
+              b = Math.floor(36 + (241 - 36) * t)
             } else {
               // Indigo to purple
-              const t = (distanceRatio - 0.66) / 0.34
+              const t = (distanceRatio - 0.75) / 0.25
               r = Math.floor(99 + (168 - 99) * t)
               g = Math.floor(102 + (85 - 102) * t)
               b = Math.floor(241 + (247 - 241) * t)
             }
 
-            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.8)`
-            ctx.fillRect(x, y, CELL_SIZE - 1, CELL_SIZE - 1)
+            // Add glow effect first
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.08)`
+            ctx.fillRect(x - 1, y - 1, CELL_SIZE + 2, CELL_SIZE + 2)
 
-            // Add glow effect
-            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.3)`
-            ctx.fillRect(x - 2, y - 2, CELL_SIZE + 3, CELL_SIZE + 3)
+            // Draw main cell
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.25)`
+            ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE)
           }
         }
+      }
+
+      // Debug log every 60 frames
+      if (generation % 60 === 0 && cellCount > 0) {
+        console.log(`Generation ${generation}: ${cellCount} cells alive`)
       }
     }
 

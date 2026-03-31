@@ -368,31 +368,31 @@ impl Database {
                 },
             ),
             (
-                "Light & Fresh",
+                "Dawn",
                 ColorPreferences {
-                    status_blocked: "220 38 38".to_string(),
-                    status_ready: "79 70 229".to_string(),
-                    status_in_progress: "20 158 158".to_string(),
-                    status_done: "28 133 31".to_string(),
-                    bg_primary: "247 249 251".to_string(),
-                    bg_secondary: "240 242 245".to_string(),
+                    status_blocked: "190 18 60".to_string(),
+                    status_ready: "29 78 216".to_string(),
+                    status_in_progress: "217 119 6".to_string(),
+                    status_done: "21 128 61".to_string(),
+                    bg_primary: "254 252 248".to_string(),
+                    bg_secondary: "250 247 242".to_string(),
                     bg_tertiary: "255 255 255".to_string(),
-                    bg_quaternary: "226 232 240".to_string(),
-                    text_primary: "42 44 48".to_string(),
-                    text_secondary: "74 82 92".to_string(),
-                    text_tertiary: "107 114 128".to_string(),
-                    text_quaternary: "156 163 175".to_string(),
-                    border_primary: "203 213 225".to_string(),
-                    border_secondary: "226 232 240".to_string(),
-                    accent_primary: "20 122 122".to_string(),
-                    accent_hover: "13 93 93".to_string(),
-                    accent_star: "245 158 11".to_string(),
-                    sidebar_bg: "23 23 27".to_string(),
-                    sidebar_border: "55 65 81".to_string(),
-                    input_bg: "31 41 55".to_string(),
-                    input_border: "75 85 99".to_string(),
-                    button_secondary: "31 41 55".to_string(),
-                    button_secondary_hover: "55 65 81".to_string(),
+                    bg_quaternary: "243 237 230".to_string(),
+                    text_primary: "17 24 39".to_string(),
+                    text_secondary: "55 65 81".to_string(),
+                    text_tertiary: "100 116 139".to_string(),
+                    text_quaternary: "148 163 184".to_string(),
+                    border_primary: "226 217 207".to_string(),
+                    border_secondary: "237 231 224".to_string(),
+                    accent_primary: "15 118 110".to_string(),
+                    accent_hover: "13 93 88".to_string(),
+                    accent_star: "217 119 6".to_string(),
+                    sidebar_bg: "250 247 242".to_string(),
+                    sidebar_border: "226 217 207".to_string(),
+                    input_bg: "255 255 255".to_string(),
+                    input_border: "203 213 225".to_string(),
+                    button_secondary: "243 237 230".to_string(),
+                    button_secondary_hover: "226 217 207".to_string(),
                 },
             ),
             (
@@ -1542,6 +1542,31 @@ impl Database {
 
         let sessions = stmt
             .query_map(params![task_id], |row| {
+                Ok(TerminalSession {
+                    id: row.get(0)?,
+                    task_id: row.get(1)?,
+                    terminal_app: row.get(2)?,
+                    terminal_uuid: row.get(3)?,
+                    window_title: row.get(4)?,
+                    working_dir: row.get(5)?,
+                    created_at: row.get(6)?,
+                    last_focused_at: row.get(7)?,
+                })
+            })?
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(sessions)
+    }
+
+    pub fn get_all_terminal_sessions(&self) -> Result<Vec<TerminalSession>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, task_id, terminal_app, terminal_uuid, window_title, working_dir, created_at, last_focused_at
+             FROM terminal_sessions ORDER BY last_focused_at DESC NULLS LAST, created_at DESC",
+        )?;
+
+        let sessions = stmt
+            .query_map([], |row| {
                 Ok(TerminalSession {
                     id: row.get(0)?,
                     task_id: row.get(1)?,

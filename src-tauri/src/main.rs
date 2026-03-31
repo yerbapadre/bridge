@@ -244,6 +244,11 @@ fn get_terminal_sessions(state: State<AppState>, task_id: String) -> Result<Vec<
 }
 
 #[tauri::command]
+fn get_all_terminal_sessions(state: State<AppState>) -> Result<Vec<TerminalSession>, String> {
+    state.db.get_all_terminal_sessions().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn update_terminal_session_focus(state: State<AppState>, id: String) -> Result<(), String> {
     state.db.update_terminal_session_focus(&id).map_err(|e| e.to_string())
 }
@@ -253,25 +258,37 @@ fn delete_terminal_session(state: State<AppState>, id: String) -> Result<(), Str
     state.db.delete_terminal_session(&id).map_err(|e| e.to_string())
 }
 
+/// Properly escape a string for use in AppleScript to prevent injection attacks
+#[cfg(target_os = "macos")]
+fn escape_applescript_string(s: &str) -> String {
+    s.replace("\\", "\\\\")  // Backslash must be first
+     .replace("\"", "\\\"")  // Escape double quotes
+     .replace("\n", "\\n")   // Escape newlines
+     .replace("\r", "\\r")   // Escape carriage returns
+     .replace("\t", "\\t")   // Escape tabs
+}
+
 #[tauri::command]
 fn focus_ghostty_window(window_title: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         use std::process::Command;
 
-        // Escape single quotes in the window title for AppleScript
-        let escaped_title = window_title.replace("'", "\\'");
+        // Properly escape the window title to prevent AppleScript injection
+        let escaped_title = escape_applescript_string(&window_title);
 
+        // Use a simpler approach: activate Ghostty and use System Events to bring window forward
         let script = format!(
             r#"
             tell application "Ghostty"
                 activate
-                repeat with w in (every window)
-                    if name of w is "{}" then
-                        set index of w to 1
-                        return
-                    end if
-                end repeat
+            end tell
+
+            tell application "System Events"
+                tell process "Ghostty"
+                    set frontmost to true
+                    perform action "AXRaise" of (first window whose name is "{}")
+                end tell
             end tell
             "#,
             escaped_title
@@ -284,7 +301,18 @@ fn focus_ghostty_window(window_title: String) -> Result<(), String> {
             .map_err(|e| format!("Failed to execute AppleScript: {}", e))?;
 
         if !output.status.success() {
-            return Err(format!("AppleScript failed: {}", String::from_utf8_lossy(&output.stderr)));
+            // If System Events approach fails, just activate Ghostty (it's better than nothing)
+            let simple_script = r#"
+                tell application "Ghostty"
+                    activate
+                end tell
+            "#;
+
+            Command::new("osascript")
+                .arg("-e")
+                .arg(simple_script)
+                .output()
+                .map_err(|e| format!("Failed to execute fallback AppleScript: {}", e))?;
         }
 
         Ok(())
@@ -423,6 +451,7 @@ fn main() {
             get_total_time_for_task,
             create_terminal_session,
             get_terminal_sessions,
+            get_all_terminal_sessions,
             update_terminal_session_focus,
             delete_terminal_session,
             focus_ghostty_window,

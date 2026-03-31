@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -126,7 +127,7 @@ export default function App() {
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [selectedParentTaskId, setSelectedParentTaskId] = useState<string | null>(null);
   const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set());
-  const [currentView, setCurrentView] = useState<"board" | "active" | "retro" | "settings">("active");
+  const [currentView, setCurrentView] = useState<"board" | "active" | "retro" | "terminals" | "settings">("active");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [projectsExpanded, setProjectsExpanded] = useState(true);
   const [newProjectName, setNewProjectName] = useState("");
@@ -154,6 +155,7 @@ export default function App() {
 
   // Terminal session state
   const [terminalSessions, setTerminalSessions] = useState<TerminalSession[]>([]);
+  const [allTerminalSessions, setAllTerminalSessions] = useState<TerminalSession[]>([]);
   const [showLinkTerminalModal, setShowLinkTerminalModal] = useState(false);
   const [availableWindows, setAvailableWindows] = useState<GhosttyWindow[]>([]);
 
@@ -273,6 +275,13 @@ export default function App() {
       setTerminalSessions([]);
     }
   }, [focusTask]);
+
+  // Load all terminal sessions when viewing the terminals page
+  useEffect(() => {
+    if (currentView === "terminals") {
+      loadAllTerminalSessions();
+    }
+  }, [currentView]);
 
   const createProject = async () => {
     if (!newProjectName.trim()) return;
@@ -700,6 +709,15 @@ export default function App() {
     }
   };
 
+  const loadAllTerminalSessions = async () => {
+    try {
+      const sessions = await invoke<TerminalSession[]>("get_all_terminal_sessions");
+      setAllTerminalSessions(sessions);
+    } catch (e) {
+      console.error("Failed to load all terminal sessions:", e);
+    }
+  };
+
   const openLinkTerminalModal = async () => {
     try {
       const windows = await invoke<GhosttyWindow[]>("list_ghostty_windows");
@@ -748,6 +766,16 @@ export default function App() {
     try {
       await invoke("delete_terminal_session", { id: sessionId });
       await loadTerminalSessions(focusTask.id);
+      await loadAllTerminalSessions(); // Also reload all sessions
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const deleteTerminalSessionFromAllView = async (sessionId: string) => {
+    try {
+      await invoke("delete_terminal_session", { id: sessionId });
+      await loadAllTerminalSessions();
     } catch (e) {
       setError(String(e));
     }
@@ -817,20 +845,13 @@ export default function App() {
           <div className="flex-1 overflow-y-auto">
             {/* Projects Section */}
             <div className="p-2">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setProjectsExpanded(!projectsExpanded)}
-                    className="w-full text-left px-3 py-2 text-xs font-semibold text-tertiary hover:text-secondary flex items-center justify-between"
-                  >
-                    <span>PROJECTS</span>
-                    <span>{projectsExpanded ? "▼" : "▶"}</span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{projectsExpanded ? "Collapse projects" : "Expand projects"}</p>
-                </TooltipContent>
-              </Tooltip>
+              <button
+                onClick={() => setProjectsExpanded(!projectsExpanded)}
+                className="w-full text-left px-3 py-2 text-xs font-semibold text-tertiary hover:text-secondary flex items-center justify-between gap-2"
+              >
+                <span>PROJECTS</span>
+                <span>{projectsExpanded ? "▼" : "▶"}</span>
+              </button>
 
               {projectsExpanded && (
                 <div className="mt-1 ml-2">
@@ -1024,6 +1045,16 @@ export default function App() {
             >
               Retro
             </button>
+            <button
+              onClick={() => setCurrentView("terminals")}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                currentView === "terminals"
+                  ? "text-accent border-b-2 border-accent"
+                  : "text-tertiary hover:text-secondary"
+              }`}
+            >
+              Terminals
+            </button>
           </div>
         )}
 
@@ -1074,6 +1105,15 @@ export default function App() {
             tasks={tasks}
             tracks={tracks}
           />
+        ) : currentView === "terminals" ? (
+          <TerminalsView
+            tasks={tasks}
+            tracks={tracks}
+            terminalSessions={allTerminalSessions}
+            openLinkTerminalModal={openLinkTerminalModal}
+            focusTerminalSession={focusTerminalSession}
+            deleteTerminalSession={deleteTerminalSessionFromAllView}
+          />
         ) : currentView === "board" ? (
         <>
           {tracks.length < 8 && (
@@ -1095,7 +1135,7 @@ export default function App() {
             </div>
           )}
 
-          <div className="flex gap-4 overflow-x-auto overflow-y-visible pb-4 flex-1">
+          <div className="flex gap-4 overflow-x-auto pb-4 flex-1">
         {mainTrack && (
           <TrackColumn
             track={mainTrack}
@@ -1500,7 +1540,7 @@ function AppearanceSettings({}: AppearanceSettingsProps) {
           <p>No themes available</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
           {themes.map((theme) => {
             const isActive = isThemeActive(theme);
             return (
@@ -1872,13 +1912,13 @@ function ActiveView({
   return (
     <div className="flex-1 overflow-y-auto space-y-6">      {/* Focus Zone - Takes up half the screen */}
       {focusTask ? (
-        <div className="bg-tertiary rounded-lg border-4 border-accent p-8 shadow-2xl min-h-[33vh] flex flex-col justify-between">
-          <div className="flex gap-8">
+        <div className="bg-tertiary rounded-lg border-4 border-accent p-4 md:p-8 shadow-2xl min-h-[33vh] flex flex-col justify-between">
+          <div className="flex flex-col lg:flex-row gap-4 md:gap-8">
             <div className="flex-1">
               <div className="text-xs font-semibold text-tertiary uppercase mb-2 tracking-wide">
                 ⚡ Currently Active
               </div>
-              <h2 className="text-3xl font-bold text-primary mb-3 leading-tight">
+              <h2 className="text-2xl md:text-3xl font-bold text-primary mb-3 leading-tight">
                 {focusTask.title}
               </h2>
               <div className="flex items-center gap-2 text-sm text-secondary mb-4">
@@ -1892,8 +1932,8 @@ function ActiveView({
               )}
             </div>
 
-            {/* Right side - terminal navigation */}
-            <div className="w-80 bg-secondary rounded-lg p-4 border border-border-primary">
+            {/* Terminal navigation - stacks below on mobile */}
+            <div className="lg:w-80 bg-secondary rounded-lg p-4 border border-border-primary">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-xs font-semibold text-tertiary uppercase">
                   Terminal Sessions
@@ -1954,7 +1994,7 @@ function ActiveView({
           <div className="mt-6">
             {activeTimer ? (
               <div className="mb-6">
-                <div className="text-5xl font-mono font-bold text-header-in-progress mb-1">
+                <div className="text-4xl md:text-5xl font-mono font-bold text-header-in-progress mb-1">
                   {formatTime(elapsedSeconds)}
                 </div>
                 <div className="text-xs text-tertiary">
@@ -1969,31 +2009,31 @@ function ActiveView({
               </div>
             )}
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 md:gap-3">
               <button
                 onClick={() => advanceTaskStatus(focusTask.id, focusTask.status)}
-                className="px-5 py-2.5 rounded-lg bg-accent font-medium text-sm shadow-lg"
+                className="px-4 md:px-5 py-2.5 rounded-lg bg-accent font-medium text-sm shadow-lg flex-1 sm:flex-initial"
               >
                 {focusTask.status === "ready" ? "Mark In Progress →" : "Complete Task →"}
               </button>
               {activeTimer ? (
                 <button
                   onClick={stopCurrentTimer}
-                  className="px-5 py-2.5 rounded-lg bg-button-secondary hover:bg-button-secondary-hover text-secondary font-medium text-sm"
+                  className="px-4 md:px-5 py-2.5 rounded-lg bg-button-secondary hover:bg-button-secondary-hover text-secondary font-medium text-sm flex-1 sm:flex-initial"
                 >
                   ⏸ Stop Timer
                 </button>
               ) : (
                 <button
                   onClick={resumeTimer}
-                  className="px-5 py-2.5 rounded-lg bg-status-in-progress text-white font-medium text-sm"
+                  className="px-4 md:px-5 py-2.5 rounded-lg bg-status-in-progress text-white font-medium text-sm flex-1 sm:flex-initial"
                 >
                   ▶ Start Timer
                 </button>
               )}
               <button
                 onClick={() => onUpdateTaskStatus(focusTask.id, "blocked")}
-                className="px-5 py-2.5 rounded-lg bg-button-secondary hover:bg-button-secondary-hover text-secondary font-medium text-sm"
+                className="px-4 md:px-5 py-2.5 rounded-lg bg-button-secondary hover:bg-button-secondary-hover text-secondary font-medium text-sm flex-1 sm:flex-initial"
               >
                 🔴 Block
               </button>
@@ -2509,6 +2549,133 @@ function RetroView({ tasks, tracks }: RetroViewProps) {
   );
 }
 
+interface TerminalsViewProps {
+  tasks: Task[];
+  tracks: Track[];
+  terminalSessions: TerminalSession[];
+  openLinkTerminalModal: () => void;
+  focusTerminalSession: (session: TerminalSession) => void;
+  deleteTerminalSession: (sessionId: string) => void;
+}
+
+function TerminalsView({
+  tasks,
+  tracks,
+  terminalSessions,
+  openLinkTerminalModal,
+  focusTerminalSession,
+  deleteTerminalSession,
+}: TerminalsViewProps) {
+  const getTaskTitle = (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    return task ? task.title : "Unknown Task";
+  };
+
+  const getTrackName = (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return "Unknown Track";
+    const track = tracks.find((t) => t.id === task.track_id);
+    return track ? track.name : "Unknown Track";
+  };
+
+  const formatTimestamp = (timestamp: number | null) => {
+    if (!timestamp) return "Never";
+    const date = new Date(timestamp * 1000);
+    return date.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto space-y-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-primary">Terminal Sessions</h2>
+          <p className="text-sm text-tertiary mt-1">
+            Manage your linked Ghostty terminal sessions
+          </p>
+        </div>
+        <button
+          onClick={openLinkTerminalModal}
+          className="px-4 py-2 bg-accent rounded text-white hover:bg-accent-hover font-medium"
+        >
+          + Link New Session
+        </button>
+      </div>
+
+      {terminalSessions.length === 0 ? (
+        <div className="bg-tertiary rounded-lg border-2 border-dashed border-border-primary p-12 text-center">
+          <p className="text-xl text-tertiary mb-3 font-semibold">
+            No terminal sessions linked
+          </p>
+          <p className="text-base text-quaternary mb-6">
+            Link Ghostty terminal windows to your tasks for quick access
+          </p>
+          <button
+            onClick={openLinkTerminalModal}
+            className="px-6 py-3 bg-accent rounded-lg text-white hover:bg-accent-hover font-medium"
+          >
+            Link Your First Session
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {terminalSessions.map((session) => (
+            <div
+              key={session.id}
+              className="bg-tertiary rounded-lg p-6 border border-border-primary hover:border-accent transition-colors"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-semibold text-primary truncate mb-1">
+                    {session.window_title || "Untitled Terminal"}
+                  </h3>
+                  <p className="text-sm text-tertiary">
+                    {getTaskTitle(session.task_id)}
+                  </p>
+                  <p className="text-xs text-quaternary">
+                    {getTrackName(session.task_id)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => deleteTerminalSession(session.id)}
+                  className="text-sm text-error hover:text-red-700 p-2"
+                  title="Unlink session"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {session.working_dir && (
+                <div className="mb-4 p-2 bg-secondary rounded">
+                  <p className="text-xs text-tertiary mb-1">Working Directory</p>
+                  <p className="text-xs font-mono text-primary truncate">
+                    {session.working_dir}
+                  </p>
+                </div>
+              )}
+
+              <div className="mb-4 text-xs text-quaternary">
+                Last focused: {formatTimestamp(session.last_focused_at)}
+              </div>
+
+              <button
+                onClick={() => focusTerminalSession(session)}
+                className="w-full px-4 py-2 bg-accent rounded text-white hover:bg-accent-hover font-medium"
+              >
+                Focus Terminal
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface BlockTaskModalProps {
   taskId: string;
   tasks: Task[];
@@ -2758,9 +2925,24 @@ function TrackColumn({
 }: TrackColumnProps) {
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
   const [showStatusSubmenu, setShowStatusSubmenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
+  const menuButtonRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
 
   const isMainTrack = track.type === "main";
   const canDragTrack = true;
+
+  const findTaskById = (taskId: string): Task | undefined => {
+    const searchInTasks = (taskList: Task[]): Task | undefined => {
+      for (const task of taskList) {
+        if (task.id === taskId) return task;
+        const subtasks = getSubtasks(task.id);
+        const found = searchInTasks(subtasks);
+        if (found) return found;
+      }
+      return undefined;
+    };
+    return searchInTasks(tasks);
+  };
 
   useEffect(() => {
     const handleClickOutside = () => {
@@ -2792,7 +2974,7 @@ function TrackColumn({
             task.status
           )} group mb-2 relative transition-all select-none ${
             isDraggingThis ? "opacity-50 cursor-grabbing" : "cursor-grab"
-          } ${isDragOverThis ? "ring-2 ring-accent mt-4" : ""} ${isMenuOpen ? "z-50" : ""}`}
+          } ${isDragOverThis ? "ring-2 ring-accent mt-4" : ""}`}
           draggable
           onDragStart={(e) => {
             console.log("Task onDragStart in component", task.id);
@@ -2859,9 +3041,23 @@ function TrackColumn({
             </div>
             <div className="relative">
               <button
+                ref={(el) => (menuButtonRefs.current[task.id] = el)}
                 onClick={(e) => {
                   e.stopPropagation();
-                  setOpenMenuTaskId(isMenuOpen ? null : task.id);
+                  if (isMenuOpen) {
+                    setOpenMenuTaskId(null);
+                    setMenuPosition(null);
+                  } else {
+                    const button = menuButtonRefs.current[task.id];
+                    if (button) {
+                      const rect = button.getBoundingClientRect();
+                      setMenuPosition({
+                        top: rect.bottom + 4,
+                        left: rect.right - 150,
+                      });
+                    }
+                    setOpenMenuTaskId(task.id);
+                  }
                 }}
                 className="text-tertiary hover:text-secondary text-sm transition-opacity"
                 title="More options"
@@ -2869,53 +3065,6 @@ function TrackColumn({
               >
                 ⋯
               </button>
-              {isMenuOpen && (
-                <div className="absolute right-0 top-6 bg-button-secondary border border-sidebar rounded shadow-lg z-50 min-w-[150px]">
-                  <div className="relative">
-                    <button
-                      onMouseEnter={() => setShowStatusSubmenu(true)}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-button-secondary-hover text-secondary"
-                    >
-                      Change Status ›
-                    </button>
-                    {showStatusSubmenu && (
-                      <div
-                        className="absolute left-full top-0 ml-1 bg-button-secondary border border-sidebar rounded shadow-lg z-50 min-w-[130px]"
-                        onMouseLeave={() => setShowStatusSubmenu(false)}
-                      >
-                        {(["blocked", "ready", "in_progress", "done"] as const).map((status) => (
-                          <button
-                            key={status}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onUpdateTaskStatus(task.id, status);
-                              setOpenMenuTaskId(null);
-                              setShowStatusSubmenu(false);
-                            }}
-                            className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                              task.status === status
-                                ? "text-tertiary bg-button-secondary-hover"
-                                : "text-secondary hover:bg-button-secondary-hover hover:text-primary"
-                            }`}
-                          >
-                            {status.charAt(0).toUpperCase() + status.slice(1).replace("_", " ")}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteTask(task.id);
-                      setOpenMenuTaskId(null);
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-button-secondary-hover text-error border-error"
-                  >
-                    Delete
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
@@ -2995,7 +3144,7 @@ function TrackColumn({
 
   return (
     <div
-      className={`bg-track rounded-lg border border-track flex flex-col h-fit min-w-[320px] w-[320px] transition-all select-none overflow-visible ${
+      className={`bg-track rounded-lg border border-track flex flex-col h-fit min-w-[320px] w-[320px] transition-all select-none ${
         canDragTrack ? (isDragging ? "opacity-50 cursor-grabbing" : "cursor-grab") : ""
       } ${isDragOver ? "ring-2 ring-accent border-accent" : ""}`}
       draggable={canDragTrack}
@@ -3055,7 +3204,7 @@ function TrackColumn({
         )}
       </div>
 
-      <div className="p-3 flex-1 overflow-visible">
+      <div className="p-3 flex-1">
         {tasks.map((task, index) => renderTask(task, index === 0))}
 
         {tasks.length === 0 && (
@@ -3100,6 +3249,76 @@ function TrackColumn({
           </button>
         )}
       </div>
+      {openMenuTaskId && menuPosition && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            top: `${menuPosition.top}px`,
+            left: `${menuPosition.left}px`,
+            zIndex: 9999,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="bg-button-secondary border border-sidebar rounded shadow-lg min-w-[150px]">
+            <div className="relative">
+              <button
+                onMouseEnter={() => setShowStatusSubmenu(true)}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-button-secondary-hover text-secondary"
+              >
+                Change Status ›
+              </button>
+              {showStatusSubmenu && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: '100%',
+                    top: 0,
+                    marginLeft: '4px',
+                    zIndex: 10000,
+                  }}
+                  className="bg-button-secondary border border-sidebar rounded shadow-lg min-w-[130px]"
+                  onMouseLeave={() => setShowStatusSubmenu(false)}
+                >
+                  {(["blocked", "ready", "in_progress", "done"] as const).map((status) => {
+                    const task = findTaskById(openMenuTaskId);
+                    return (
+                      <button
+                        key={status}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdateTaskStatus(openMenuTaskId, status);
+                          setOpenMenuTaskId(null);
+                          setMenuPosition(null);
+                          setShowStatusSubmenu(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                          task?.status === status
+                            ? "text-tertiary bg-button-secondary-hover"
+                            : "text-secondary hover:bg-button-secondary-hover hover:text-primary"
+                        }`}
+                      >
+                        {status.charAt(0).toUpperCase() + status.slice(1).replace("_", " ")}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteTask(openMenuTaskId);
+                setOpenMenuTaskId(null);
+                setMenuPosition(null);
+              }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-button-secondary-hover text-error border-error"
+            >
+              Delete
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
