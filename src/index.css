@@ -84,7 +84,7 @@ body {
   .bg-accent {
     background-color: rgb(var(--color-accent-primary));
     box-shadow: 0 0 12px rgba(var(--color-accent-primary), 0.4);
-    color: rgb(var(--color-text-primary));
+    color: rgb(var(--color-sidebar-bg));
   }
   .bg-accent:hover {
     background-color: rgb(var(--color-accent-hover));

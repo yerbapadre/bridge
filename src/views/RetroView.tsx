@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Task, Track } from "@/types";
 import { Check, Star } from "lucide-react";
+import { getTrackName } from "@/lib/utils";
 
 interface RetroViewProps {
   tasks: Task[];
@@ -9,10 +10,6 @@ interface RetroViewProps {
 
 function RetroView({ tasks, tracks }: RetroViewProps) {
   const [selectedFilter, setSelectedFilter] = useState<"today" | "week" | "month" | "custom">("today");
-
-  const getTrackName = (trackId: string) => {
-    return tracks.find((t) => t.id === trackId)?.name || "Unknown Track";
-  };
 
   const isToday = (timestamp: number | null): boolean => {
     if (!timestamp) return false;
@@ -132,7 +129,7 @@ function RetroView({ tasks, tracks }: RetroViewProps) {
 
   const filteredCompletedTasks = selectedFilter === "today" ? todayCompletedTasks : weekCompletedTasks;
   const completedByTrack = filteredCompletedTasks.reduce((acc, task) => {
-    const trackName = getTrackName(task.track_id);
+    const trackName = getTrackName(tracks, task.track_id);
     if (!acc[trackName]) {
       acc[trackName] = [];
     }
@@ -272,7 +269,7 @@ function RetroView({ tasks, tracks }: RetroViewProps) {
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-primary">{task.title}</div>
                       <div className="text-xs text-tertiary mt-1">
-                        {getTrackName(task.track_id)} • {formatTimeOfDay(task.completed_at)}
+                        {getTrackName(tracks, task.track_id)} • {formatTimeOfDay(task.completed_at)}
                       </div>
                     </div>
                   </div>
@@ -397,7 +394,7 @@ function RetroView({ tasks, tracks }: RetroViewProps) {
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-primary">{task.title}</div>
                       <div className="text-xs text-tertiary mt-1">
-                        {getTrackName(task.track_id)} • {formatTimeOfDay(task.completed_at)}
+                        {getTrackName(tracks, task.track_id)} • {formatTimeOfDay(task.completed_at)}
                       </div>
                     </div>
                   </div>

@@ -1,21 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ChevronRight, ChevronDown, Check, ArrowRight, Ban, Terminal, Plus, MoreVertical } from "lucide-react";
-
-interface Task {
-  id: string;
-  track_id: string;
-  title: string;
-  description: string | null;
-  status: "blocked" | "ready" | "in_progress" | "done";
-  position: number;
-  parent_task_id: string | null;
-  depth: number;
-  created_at: number;
-  updated_at: number;
-  completed_at: number | null;
-  is_current_focus: boolean;
-}
+import type { Task } from "@/types";
 
 interface TaskCardProps {
   task: Task;
@@ -32,6 +18,7 @@ interface TaskCardProps {
   draggedTaskId?: string | null;
   dragOverTaskId?: string | null;
   onUpdateTaskStatus: (taskId: string, status: Task["status"]) => void;
+  onUpdateTaskTitle: (taskId: string, title: string) => void;
   onDeleteTask: (taskId: string) => void;
   advanceTaskStatus: (taskId: string, currentStatus: Task["status"]) => void;
   onOpenBlockModal: (taskId: string) => void;
@@ -59,6 +46,7 @@ export default function TaskCard({
   draggedTaskId,
   dragOverTaskId,
   onUpdateTaskStatus,
+  onUpdateTaskTitle,
   onDeleteTask,
   advanceTaskStatus,
   onOpenBlockModal,
@@ -73,6 +61,8 @@ export default function TaskCard({
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
   const [showStatusSubmenu, setShowStatusSubmenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTitleValue, setEditingTitleValue] = useState("");
   const menuButtonRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
 
   const findTaskById = (taskId: string): Task | undefined => {
@@ -169,9 +159,70 @@ export default function TaskCard({
                 </button>
               )}
               <div className="flex-1">
-                <p className="text-sm font-medium leading-snug text-primary select-text">{currentTask.title}</p>
-                {currentTask.description && (
-                  <p className="text-xs text-tertiary mt-1 select-text">{currentTask.description}</p>
+                {editingTaskId === currentTask.id ? (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={editingTitleValue}
+                      onChange={(e) => setEditingTitleValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && editingTitleValue.trim()) {
+                          onUpdateTaskTitle(currentTask.id, editingTitleValue.trim());
+                          setEditingTaskId(null);
+                        }
+                        if (e.key === "Escape") {
+                          setEditingTaskId(null);
+                          setEditingTitleValue("");
+                        }
+                      }}
+                      className="w-full px-2 py-1 rounded bg-quaternary border border-input text-sm text-primary focus:outline-none focus:border-accent"
+                      autoFocus
+                      maxLength={255}
+                      draggable="false"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (editingTitleValue.trim()) {
+                            onUpdateTaskTitle(currentTask.id, editingTitleValue.trim());
+                            setEditingTaskId(null);
+                          }
+                        }}
+                        className="px-2 py-1 rounded bg-accent text-white text-xs hover:bg-accent-hover"
+                        draggable="false"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingTaskId(null);
+                          setEditingTitleValue("");
+                        }}
+                        className="px-2 py-1 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary text-xs"
+                        draggable="false"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p
+                      className="text-sm font-medium leading-snug text-primary select-text cursor-text"
+                      onDoubleClick={() => {
+                        setEditingTaskId(currentTask.id);
+                        setEditingTitleValue(currentTask.title);
+                      }}
+                    >
+                      {currentTask.title}
+                    </p>
+                    {currentTask.description && (
+                      <p className="text-xs text-tertiary mt-1 select-text">{currentTask.description}</p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -345,6 +396,21 @@ export default function TaskCard({
                 </div>
               )}
             </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const foundTask = findTaskById(openMenuTaskId);
+                if (foundTask) {
+                  setEditingTaskId(openMenuTaskId);
+                  setEditingTitleValue(foundTask.title);
+                }
+                setOpenMenuTaskId(null);
+                setMenuPosition(null);
+              }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-button-secondary-hover text-secondary"
+            >
+              Rename
+            </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();

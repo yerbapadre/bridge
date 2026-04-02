@@ -188,7 +188,6 @@ Users can customize all colors via Settings page. Colors persist in `preferences
 ### 4. Track Types
 - **Main Track**: Marked with ★, only one per project, cannot be deleted
 - **Side Tracks**: Multiple allowed, can be deleted
-- Max 8 tracks total per project
 
 ### 5. Task Card Borders
 ```tsx
@@ -353,7 +352,6 @@ Migrations are in `src-tauri/src/db.rs` in the `run_migrations()` function. To a
 
 ## Known Limitations
 
-- Max 8 tracks per project
 - Max 2 levels of task nesting (parent → child → grandchild)
 - SQLite is single-file, no multi-user support
 - No undo/redo functionality

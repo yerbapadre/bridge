@@ -15,9 +15,11 @@ interface BoardViewProps {
   isTrackComplete: (trackId: string) => boolean;
   onCreateTrack: (name: string) => Promise<void>;
   onDeleteTrack: (id: string) => Promise<void>;
+  onUpdateTrackName: (trackId: string, name: string) => Promise<void>;
   onReorderTracks: (trackId: string, newPosition: number) => Promise<void>;
   onCreateTask: (trackId: string, title: string, parentTaskId: string | null) => Promise<void>;
   onUpdateTaskStatus: (taskId: string, status: Task["status"]) => Promise<void>;
+  onUpdateTaskTitle: (taskId: string, title: string) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
   onReorderTasks: (taskId: string, newPosition: number) => Promise<void>;
   advanceTaskStatus: (taskId: string, currentStatus: Task["status"]) => Promise<void>;
@@ -36,9 +38,11 @@ export default function BoardView({
   isTrackComplete,
   onCreateTrack,
   onDeleteTrack,
+  onUpdateTrackName,
   onReorderTracks,
   onCreateTask,
   onUpdateTaskStatus,
+  onUpdateTaskTitle,
   onDeleteTask,
   onReorderTasks,
   advanceTaskStatus,
@@ -168,24 +172,22 @@ export default function BoardView({
 
   return (
     <>
-      {tracks.length < 8 && (
-        <div className="mb-6 flex gap-2">
-          <input
-            type="text"
-            value={newTrackName}
-            onChange={(e) => setNewTrackName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleCreateTrack()}
-            placeholder={`New ${tracks.length === 0 ? "main" : "side"} track name...`}
-            className="flex-1 bg-input border border-input rounded px-3 py-2 text-sm text-primary"
-          />
-          <button
-            onClick={handleCreateTrack}
-            className="bg-accent px-4 py-2 rounded text-sm font-medium"
-          >
-            Add Track
-          </button>
-        </div>
-      )}
+      <div className="mb-6 flex gap-2">
+        <input
+          type="text"
+          value={newTrackName}
+          onChange={(e) => setNewTrackName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleCreateTrack()}
+          placeholder={`New ${tracks.length === 0 ? "main" : "side"} track name...`}
+          className="flex-1 bg-input border border-input rounded px-3 py-2 text-sm text-primary"
+        />
+        <button
+          onClick={handleCreateTrack}
+          className="bg-accent px-4 py-2 rounded text-sm font-medium"
+        >
+          Add Track
+        </button>
+      </div>
 
       {tracks.length > 0 && (
         <div className="mb-6 flex gap-2">
@@ -215,8 +217,10 @@ export default function BoardView({
             track={filteredMainTrack}
             tasks={getFilteredTasksForTrack(filteredMainTrack.id)}
             onDeleteTrack={onDeleteTrack}
+            onUpdateTrackName={onUpdateTrackName}
             onCreateTask={handleCreateTask}
             onUpdateTaskStatus={onUpdateTaskStatus}
+            onUpdateTaskTitle={onUpdateTaskTitle}
             onDeleteTask={onDeleteTask}
             advanceTaskStatus={advanceTaskStatus}
             getStatusBorderColor={getStatusBorderColor}
@@ -255,8 +259,10 @@ export default function BoardView({
             track={track}
             tasks={getFilteredTasksForTrack(track.id)}
             onDeleteTrack={onDeleteTrack}
+            onUpdateTrackName={onUpdateTrackName}
             onCreateTask={handleCreateTask}
             onUpdateTaskStatus={onUpdateTaskStatus}
+            onUpdateTaskTitle={onUpdateTaskTitle}
             onDeleteTask={onDeleteTask}
             advanceTaskStatus={advanceTaskStatus}
             getStatusBorderColor={getStatusBorderColor}

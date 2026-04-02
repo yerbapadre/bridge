@@ -18,6 +18,7 @@ pub struct Project {
     pub color: Option<String>,
     pub root_path: Option<String>,
     pub focused_task_id: Option<String>,
+    pub is_system_project: bool,
     pub position: i32,
     pub created_at: i64,
     pub updated_at: i64,
@@ -30,6 +31,7 @@ pub struct Track {
     pub name: String,
     #[serde(rename = "type")]
     pub track_type: String,
+    pub system_track_type: Option<String>,
     pub color: Option<String>,
     pub position: i32,
     pub created_at: i64,
@@ -75,6 +77,8 @@ pub struct TerminalSession {
     pub terminal_uuid: Option<String>,
     pub window_title: Option<String>,
     pub working_dir: Option<String>,
+    pub session_type: String,
+    pub ai_command: Option<String>,
     pub created_at: i64,
     pub last_focused_at: Option<i64>,
 }
@@ -86,6 +90,8 @@ pub struct CreateTerminalSessionInput {
     pub terminal_uuid: Option<String>,
     pub window_title: Option<String>,
     pub working_dir: Option<String>,
+    pub session_type: String,
+    pub ai_command: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -109,6 +115,7 @@ pub struct CreateTrackInput {
     pub name: String,
     #[serde(rename = "type")]
     pub track_type: String,
+    pub system_track_type: Option<String>,
     pub color: Option<String>,
 }
 
@@ -189,6 +196,23 @@ impl Database {
             )?;
         }
 
+        // Migration: Add is_system_project column if it doesn't exist
+        let has_is_system_project_col: bool = conn
+            .prepare("PRAGMA table_info(projects)")?
+            .query_map([], |row| {
+                let name: String = row.get(1)?;
+                Ok(name)
+            })?
+            .filter_map(Result::ok)
+            .any(|name| name == "is_system_project");
+
+        if !has_is_system_project_col {
+            conn.execute(
+                "ALTER TABLE projects ADD COLUMN is_system_project BOOLEAN NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+
         conn.execute(
             "CREATE TABLE IF NOT EXISTS tracks (
                 id TEXT PRIMARY KEY,
@@ -229,6 +253,23 @@ impl Database {
             // Add project_id column with default value
             conn.execute(
                 &format!("ALTER TABLE tracks ADD COLUMN project_id TEXT NOT NULL DEFAULT '{}'", default_project_id),
+                [],
+            )?;
+        }
+
+        // Migration: Add system_track_type column if it doesn't exist
+        let has_system_track_type_col: bool = conn
+            .prepare("PRAGMA table_info(tracks)")?
+            .query_map([], |row| {
+                let name: String = row.get(1)?;
+                Ok(name)
+            })?
+            .filter_map(Result::ok)
+            .any(|name| name == "system_track_type");
+
+        if !has_system_track_type_col {
+            conn.execute(
+                "ALTER TABLE tracks ADD COLUMN system_track_type TEXT",
                 [],
             )?;
         }
@@ -367,6 +408,40 @@ impl Database {
             "CREATE INDEX IF NOT EXISTS idx_terminal_sessions_task ON terminal_sessions(task_id)",
             [],
         )?;
+
+        // Migration: Add session_type column if it doesn't exist
+        let has_session_type_col: bool = conn
+            .prepare("PRAGMA table_info(terminal_sessions)")?
+            .query_map([], |row| {
+                let name: String = row.get(1)?;
+                Ok(name)
+            })?
+            .filter_map(Result::ok)
+            .any(|name| name == "session_type");
+
+        if !has_session_type_col {
+            conn.execute(
+                "ALTER TABLE terminal_sessions ADD COLUMN session_type TEXT NOT NULL DEFAULT 'manual'",
+                [],
+            )?;
+        }
+
+        // Migration: Add ai_command column if it doesn't exist
+        let has_ai_command_col: bool = conn
+            .prepare("PRAGMA table_info(terminal_sessions)")?
+            .query_map([], |row| {
+                let name: String = row.get(1)?;
+                Ok(name)
+            })?
+            .filter_map(Result::ok)
+            .any(|name| name == "ai_command");
+
+        if !has_ai_command_col {
+            conn.execute(
+                "ALTER TABLE terminal_sessions ADD COLUMN ai_command TEXT",
+                [],
+            )?;
+        }
 
         drop(conn);
         self.init_preset_themes()?;
@@ -567,10 +642,6 @@ impl Database {
             |row| row.get(0),
         )?;
 
-        if count >= 8 {
-            return Err(rusqlite::Error::ExecuteReturnedResults);
-        }
-
         if input.track_type == "main" {
             let main_count: i64 = conn.query_row(
                 "SELECT COUNT(*) FROM tracks WHERE project_id = ?1 AND type = 'main'",
@@ -587,9 +658,9 @@ impl Database {
         let position = count as i32;
 
         conn.execute(
-            "INSERT INTO tracks (id, project_id, name, type, color, position, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![id, input.project_id, input.name, input.track_type, input.color, position, now, now],
+            "INSERT INTO tracks (id, project_id, name, type, system_track_type, color, position, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![id, input.project_id, input.name, input.track_type, input.system_track_type, input.color, position, now, now],
         )?;
 
         Ok(Track {
@@ -597,6 +668,7 @@ impl Database {
             project_id: input.project_id,
             name: input.name,
             track_type: input.track_type,
+            system_track_type: input.system_track_type,
             color: input.color,
             position,
             created_at: now,
@@ -609,13 +681,13 @@ impl Database {
 
         let (query, params_vec): (String, Vec<String>) = if let Some(pid) = project_id {
             (
-                "SELECT id, project_id, name, type, color, position, created_at, updated_at
+                "SELECT id, project_id, name, type, system_track_type, color, position, created_at, updated_at
                  FROM tracks WHERE project_id = ?1 ORDER BY position".to_string(),
                 vec![pid],
             )
         } else {
             (
-                "SELECT id, project_id, name, type, color, position, created_at, updated_at
+                "SELECT id, project_id, name, type, system_track_type, color, position, created_at, updated_at
                  FROM tracks ORDER BY position".to_string(),
                 vec![],
             )
@@ -635,10 +707,11 @@ impl Database {
                     project_id: row.get(1)?,
                     name: row.get(2)?,
                     track_type: row.get(3)?,
-                    color: row.get(4)?,
-                    position: row.get(5)?,
-                    created_at: row.get(6)?,
-                    updated_at: row.get(7)?,
+                    system_track_type: row.get(4)?,
+                    color: row.get(5)?,
+                    position: row.get(6)?,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -656,7 +729,7 @@ impl Database {
         )?;
 
         let track = conn.query_row(
-            "SELECT id, project_id, name, type, color, position, created_at, updated_at FROM tracks WHERE id = ?1",
+            "SELECT id, project_id, name, type, system_track_type, color, position, created_at, updated_at FROM tracks WHERE id = ?1",
             params![id],
             |row| {
                 Ok(Track {
@@ -664,10 +737,11 @@ impl Database {
                     project_id: row.get(1)?,
                     name: row.get(2)?,
                     track_type: row.get(3)?,
-                    color: row.get(4)?,
-                    position: row.get(5)?,
-                    created_at: row.get(6)?,
-                    updated_at: row.get(7)?,
+                    system_track_type: row.get(4)?,
+                    color: row.get(5)?,
+                    position: row.get(6)?,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
                 })
             },
         )?;
@@ -1033,9 +1107,9 @@ impl Database {
         let position = count as i32;
 
         conn.execute(
-            "INSERT INTO projects (id, name, description, color, root_path, focused_task_id, position, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![id, input.name, input.description, input.color, None::<String>, None::<String>, position, now, now],
+            "INSERT INTO projects (id, name, description, color, root_path, focused_task_id, is_system_project, position, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![id, input.name, input.description, input.color, None::<String>, None::<String>, false, position, now, now],
         )?;
 
         Ok(Project {
@@ -1045,6 +1119,7 @@ impl Database {
             color: input.color,
             root_path: None,
             focused_task_id: None,
+            is_system_project: false,
             position,
             created_at: now,
             updated_at: now,
@@ -1054,7 +1129,7 @@ impl Database {
     pub fn get_projects(&self) -> Result<Vec<Project>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, color, root_path, focused_task_id, position, created_at, updated_at
+            "SELECT id, name, description, color, root_path, focused_task_id, is_system_project, position, created_at, updated_at
              FROM projects ORDER BY position",
         )?;
 
@@ -1067,9 +1142,10 @@ impl Database {
                     color: row.get(3)?,
                     root_path: row.get(4)?,
                     focused_task_id: row.get(5)?,
-                    position: row.get(6)?,
-                    created_at: row.get(7)?,
-                    updated_at: row.get(8)?,
+                    is_system_project: row.get(6)?,
+                    position: row.get(7)?,
+                    created_at: row.get(8)?,
+                    updated_at: row.get(9)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -1087,7 +1163,7 @@ impl Database {
         )?;
 
         let project = conn.query_row(
-            "SELECT id, name, description, color, root_path, focused_task_id, position, created_at, updated_at FROM projects WHERE id = ?1",
+            "SELECT id, name, description, color, root_path, focused_task_id, is_system_project, position, created_at, updated_at FROM projects WHERE id = ?1",
             params![id],
             |row| {
                 Ok(Project {
@@ -1097,9 +1173,10 @@ impl Database {
                     color: row.get(3)?,
                     root_path: row.get(4)?,
                     focused_task_id: row.get(5)?,
-                    position: row.get(6)?,
-                    created_at: row.get(7)?,
-                    updated_at: row.get(8)?,
+                    is_system_project: row.get(6)?,
+                    position: row.get(7)?,
+                    created_at: row.get(8)?,
+                    updated_at: row.get(9)?,
                 })
             },
         )?;
@@ -1214,104 +1291,52 @@ impl Database {
         let tx = conn.transaction()?;
 
         // Get current position and type of dragged track
-        let (current_position, track_type): (i32, String) = tx.query_row(
-            "SELECT position, type FROM tracks WHERE id = ?1 AND project_id = ?2",
+        let current_position: i32 = tx.query_row(
+            "SELECT position FROM tracks WHERE id = ?1 AND project_id = ?2",
             params![track_id, project_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| row.get(0),
         )?;
 
-        eprintln!("reorder_tracks: track_id={}, current_position={}, track_type={}, new_position={}",
-            track_id, current_position, track_type, new_position);
+        if current_position == new_position {
+            return Ok(());
+        }
 
         let now = chrono::Utc::now().timestamp();
 
-        // Check if this involves swapping main track type
-        let is_dragged_main = track_type == "main";
-        let is_target_position_main = new_position == 0;
-
-        eprintln!("is_dragged_main={}, is_target_position_main={}", is_dragged_main, is_target_position_main);
-
-        if is_dragged_main || is_target_position_main {
-            // We're swapping main track type
-            if is_dragged_main && !is_target_position_main {
-                eprintln!("CASE: Main track being dragged to side position");
-                // Main track being dragged to a side position - swap with target
-                let (target_track_id,): (String,) = tx.query_row(
-                    "SELECT id FROM tracks WHERE project_id = ?1 AND position = ?2",
-                    params![project_id, new_position],
-                    |row| Ok((row.get(0)?,)),
-                )?;
-
-                eprintln!("Target track at position {} is {}", new_position, target_track_id);
-
-                // Set dragged track to side at new position
-                tx.execute(
-                    "UPDATE tracks SET type = 'side', position = ?1, updated_at = ?2 WHERE id = ?3",
-                    params![new_position, now, track_id],
-                )?;
-
-                // Set target track to main at position 0
-                tx.execute(
-                    "UPDATE tracks SET type = 'main', position = 0, updated_at = ?1 WHERE id = ?2",
-                    params![now, target_track_id],
-                )?;
-
-                eprintln!("Successfully swapped: {} is now side at {}, {} is now main at 0", track_id, new_position, target_track_id);
-            } else if !is_dragged_main && is_target_position_main {
-                eprintln!("CASE: Side track being dragged to position 0 (promote to main)");
-                // Side track being dragged to position 0 - promote to main
-                let (main_track_id,): (String,) = tx.query_row(
-                    "SELECT id FROM tracks WHERE project_id = ?1 AND type = 'main'",
-                    params![project_id],
-                    |row| Ok((row.get(0)?,)),
-                )?;
-
-                eprintln!("Current main track is {}", main_track_id);
-
-                // Set dragged track to main at position 0
-                tx.execute(
-                    "UPDATE tracks SET type = 'main', position = 0, updated_at = ?1 WHERE id = ?2",
-                    params![now, track_id],
-                )?;
-
-                // Set old main track to side at dragged track's old position
-                tx.execute(
-                    "UPDATE tracks SET type = 'side', position = ?1, updated_at = ?2 WHERE id = ?3",
-                    params![current_position, now, main_track_id],
-                )?;
-
-                eprintln!("Successfully swapped: {} is now main at 0, {} is now side at {}", track_id, main_track_id, current_position);
-            } else {
-                eprintln!("CASE: Both tracks are main or same position - doing nothing");
-            }
-        } else {
-            eprintln!("CASE: Normal side track reordering (no main track involved)");
-            // Normal side track reordering (no main track involved)
-            // Shift positions to make room
-            if new_position < current_position {
-                // Moving left: shift tracks right
-                tx.execute(
-                    "UPDATE tracks
-                     SET position = position + 1, updated_at = ?1
-                     WHERE project_id = ?2 AND position >= ?3 AND position < ?4",
-                    params![now, project_id, new_position, current_position],
-                )?;
-            } else if new_position > current_position {
-                // Moving right: shift tracks left
-                tx.execute(
-                    "UPDATE tracks
-                     SET position = position - 1, updated_at = ?1
-                     WHERE project_id = ?2 AND position > ?3 AND position <= ?4",
-                    params![now, project_id, current_position, new_position],
-                )?;
-            }
-
-            // Update the dragged track's position
+        // Shift tracks to make room
+        if new_position < current_position {
+            // Moving left: shift tracks right
             tx.execute(
-                "UPDATE tracks SET position = ?1, updated_at = ?2 WHERE id = ?3",
-                params![new_position, now, track_id],
+                "UPDATE tracks
+                 SET position = position + 1, updated_at = ?1
+                 WHERE project_id = ?2 AND position >= ?3 AND position < ?4",
+                params![now, project_id, new_position, current_position],
+            )?;
+        } else {
+            // Moving right: shift tracks left
+            tx.execute(
+                "UPDATE tracks
+                 SET position = position - 1, updated_at = ?1
+                 WHERE project_id = ?2 AND position > ?3 AND position <= ?4",
+                params![now, project_id, current_position, new_position],
             )?;
         }
+
+        // Update the dragged track's position
+        tx.execute(
+            "UPDATE tracks SET position = ?1, updated_at = ?2 WHERE id = ?3",
+            params![new_position, now, track_id],
+        )?;
+
+        // Ensure position 0 is always type='main' and others are type='side'
+        tx.execute(
+            "UPDATE tracks SET type = 'main' WHERE project_id = ?1 AND position = 0",
+            params![project_id],
+        )?;
+        tx.execute(
+            "UPDATE tracks SET type = 'side' WHERE project_id = ?1 AND position != 0",
+            params![project_id],
+        )?;
 
         tx.commit()?;
         Ok(())
@@ -1631,8 +1656,8 @@ impl Database {
         let now = chrono::Utc::now().timestamp();
 
         conn.execute(
-            "INSERT INTO terminal_sessions (id, task_id, terminal_app, terminal_uuid, window_title, working_dir, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO terminal_sessions (id, task_id, terminal_app, terminal_uuid, window_title, working_dir, session_type, ai_command, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 id,
                 input.task_id,
@@ -1640,6 +1665,8 @@ impl Database {
                 input.terminal_uuid,
                 input.window_title,
                 input.working_dir,
+                input.session_type,
+                input.ai_command,
                 now
             ],
         )?;
@@ -1651,6 +1678,8 @@ impl Database {
             terminal_uuid: input.terminal_uuid,
             window_title: input.window_title,
             working_dir: input.working_dir,
+            session_type: input.session_type,
+            ai_command: input.ai_command,
             created_at: now,
             last_focused_at: None,
         })
@@ -1659,7 +1688,7 @@ impl Database {
     pub fn get_terminal_sessions(&self, task_id: &str) -> Result<Vec<TerminalSession>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, task_id, terminal_app, terminal_uuid, window_title, working_dir, created_at, last_focused_at
+            "SELECT id, task_id, terminal_app, terminal_uuid, window_title, working_dir, session_type, ai_command, created_at, last_focused_at
              FROM terminal_sessions WHERE task_id = ?1 ORDER BY created_at DESC",
         )?;
 
@@ -1672,8 +1701,10 @@ impl Database {
                     terminal_uuid: row.get(3)?,
                     window_title: row.get(4)?,
                     working_dir: row.get(5)?,
-                    created_at: row.get(6)?,
-                    last_focused_at: row.get(7)?,
+                    session_type: row.get(6)?,
+                    ai_command: row.get(7)?,
+                    created_at: row.get(8)?,
+                    last_focused_at: row.get(9)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -1684,7 +1715,7 @@ impl Database {
     pub fn get_all_terminal_sessions(&self) -> Result<Vec<TerminalSession>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, task_id, terminal_app, terminal_uuid, window_title, working_dir, created_at, last_focused_at
+            "SELECT id, task_id, terminal_app, terminal_uuid, window_title, working_dir, session_type, ai_command, created_at, last_focused_at
              FROM terminal_sessions ORDER BY last_focused_at DESC NULLS LAST, created_at DESC",
         )?;
 
@@ -1697,8 +1728,10 @@ impl Database {
                     terminal_uuid: row.get(3)?,
                     window_title: row.get(4)?,
                     working_dir: row.get(5)?,
-                    created_at: row.get(6)?,
-                    last_focused_at: row.get(7)?,
+                    session_type: row.get(6)?,
+                    ai_command: row.get(7)?,
+                    created_at: row.get(8)?,
+                    last_focused_at: row.get(9)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -1729,6 +1762,14 @@ impl Database {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserPreferences {
     pub colors: ColorPreferences,
+    pub ai_mode: Option<AiModePreferences>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AiModePreferences {
+    pub enabled: bool,
+    pub command: String,
+    pub project_path: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1806,6 +1847,7 @@ impl Default for UserPreferences {
     fn default() -> Self {
         UserPreferences {
             colors: ColorPreferences::default(),
+            ai_mode: None,
         }
     }
 }

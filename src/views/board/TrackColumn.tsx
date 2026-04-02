@@ -1,38 +1,16 @@
+import { useState } from "react";
 import TaskCard from "./TaskCard";
 import { Star, X } from "lucide-react";
-
-interface Task {
-  id: string;
-  track_id: string;
-  title: string;
-  description: string | null;
-  status: "blocked" | "ready" | "in_progress" | "done";
-  position: number;
-  parent_task_id: string | null;
-  depth: number;
-  created_at: number;
-  updated_at: number;
-  completed_at: number | null;
-  is_current_focus: boolean;
-}
-
-interface Track {
-  id: string;
-  project_id: string;
-  name: string;
-  type: "main" | "side";
-  color: string | null;
-  position: number;
-  created_at: number;
-  updated_at: number;
-}
+import type { Task, Track } from "@/types";
 
 interface TrackColumnProps {
   track: Track;
   tasks: Task[];
   onDeleteTrack: (id: string) => void;
+  onUpdateTrackName: (trackId: string, name: string) => void;
   onCreateTask: (trackId: string, parentTaskId?: string | null) => void;
   onUpdateTaskStatus: (taskId: string, status: Task["status"]) => void;
+  onUpdateTaskTitle: (taskId: string, title: string) => void;
   onDeleteTask: (taskId: string) => void;
   advanceTaskStatus: (taskId: string, currentStatus: Task["status"]) => void;
   getStatusBorderColor: (status: Task["status"]) => string;
@@ -72,8 +50,10 @@ export default function TrackColumn({
   track,
   tasks,
   onDeleteTrack,
+  onUpdateTrackName,
   onCreateTask,
   onUpdateTaskStatus,
+  onUpdateTaskTitle,
   onDeleteTask,
   advanceTaskStatus,
   getStatusBorderColor,
@@ -104,8 +84,11 @@ export default function TrackColumn({
   draggedTaskId,
   dragOverTaskId,
 }: TrackColumnProps) {
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editingNameValue, setEditingNameValue] = useState(track.name);
+
   const isMainTrack = track.type === "main";
-  const canDragTrack = true;
+  const canDragTrack = !isEditingName;
 
   return (
     <div
@@ -154,30 +137,83 @@ export default function TrackColumn({
       onDragEnd={() => onTrackDragEnd && onTrackDragEnd()}
     >
       <div className="p-4 border-b border-sidebar flex items-center justify-between">
-        <div>
-          <h2 className="font-semibold flex items-center gap-2 text-primary">
-            {isMainTrack && <Star size={16} className="text-star fill-star" />}
-            {track.name}
-          </h2>
-          <p className="text-xs text-tertiary mt-0.5">
-            {isMainTrack ? "Main Track" : "Side Track"}
-          </p>
-        </div>
-        {track.type !== "main" && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDeleteTrack(track.id);
-            }}
-            onMouseDown={(e) => {
-              e.stopPropagation();
-            }}
-            className="text-tertiary hover:text-error pointer-events-auto z-10 relative"
-            title="Delete track"
-            draggable="false"
-          >
-            <X size={16} />
-          </button>
+        {isEditingName ? (
+          <div className="flex-1 space-y-2">
+            <input
+              type="text"
+              value={editingNameValue}
+              onChange={(e) => setEditingNameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && editingNameValue.trim()) {
+                  onUpdateTrackName(track.id, editingNameValue.trim());
+                  setIsEditingName(false);
+                }
+                if (e.key === "Escape") {
+                  setIsEditingName(false);
+                  setEditingNameValue(track.name);
+                }
+              }}
+              className="w-full px-2 py-1 rounded bg-quaternary border border-input text-primary focus:outline-none focus:border-accent"
+              autoFocus
+              maxLength={255}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  if (editingNameValue.trim()) {
+                    onUpdateTrackName(track.id, editingNameValue.trim());
+                    setIsEditingName(false);
+                  }
+                }}
+                className="px-3 py-1 rounded bg-accent text-white text-sm hover:bg-accent-hover"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setIsEditingName(false);
+                  setEditingNameValue(track.name);
+                }}
+                className="px-3 py-1 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex-1">
+              <h2
+                className="font-semibold flex items-center gap-2 text-primary cursor-text"
+                onDoubleClick={() => {
+                  setIsEditingName(true);
+                  setEditingNameValue(track.name);
+                }}
+              >
+                {isMainTrack && <Star size={16} className="text-star fill-star" />}
+                {track.name}
+              </h2>
+              <p className="text-xs text-tertiary mt-0.5">
+                {isMainTrack ? "Main Track" : "Side Track"}
+              </p>
+            </div>
+            {track.type !== "main" && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteTrack(track.id);
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                }}
+                className="text-tertiary hover:text-error pointer-events-auto z-10 relative"
+                title="Delete track"
+                draggable="false"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </>
         )}
       </div>
 
@@ -199,6 +235,7 @@ export default function TrackColumn({
             draggedTaskId={draggedTaskId}
             dragOverTaskId={dragOverTaskId}
             onUpdateTaskStatus={onUpdateTaskStatus}
+            onUpdateTaskTitle={onUpdateTaskTitle}
             onDeleteTask={onDeleteTask}
             advanceTaskStatus={advanceTaskStatus}
             onOpenBlockModal={onOpenBlockModal}

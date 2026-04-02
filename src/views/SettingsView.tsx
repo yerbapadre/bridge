@@ -1,11 +1,12 @@
 import { useState } from "react";
 import AppearanceSettings from "./settings/AppearanceSettings";
 import CustomizeSettings from "./settings/CustomizeSettings";
+import KeyboardShortcutsSettings from "./settings/KeyboardShortcutsSettings";
 
 interface SettingsViewProps {}
 
 function SettingsView({}: SettingsViewProps) {
-  const [settingsView, setSettingsView] = useState<"appearance" | "customize">("appearance");
+  const [settingsView, setSettingsView] = useState<"appearance" | "customize" | "shortcuts">("appearance");
 
   return (
     <div className="flex-1 flex gap-6">
@@ -16,7 +17,7 @@ function SettingsView({}: SettingsViewProps) {
             onClick={() => setSettingsView("appearance")}
             className={`w-full text-left px-4 py-2 rounded text-sm transition-colors ${
               settingsView === "appearance"
-                ? "bg-accent text-primary font-medium"
+                ? "bg-accent font-medium"
                 : "text-secondary hover:bg-button-secondary"
             }`}
           >
@@ -26,11 +27,21 @@ function SettingsView({}: SettingsViewProps) {
             onClick={() => setSettingsView("customize")}
             className={`w-full text-left px-4 py-2 rounded text-sm transition-colors ${
               settingsView === "customize"
-                ? "bg-accent text-primary font-medium"
+                ? "bg-accent font-medium"
                 : "text-secondary hover:bg-button-secondary"
             }`}
           >
             Customize
+          </button>
+          <button
+            onClick={() => setSettingsView("shortcuts")}
+            className={`w-full text-left px-4 py-2 rounded text-sm transition-colors ${
+              settingsView === "shortcuts"
+                ? "bg-accent font-medium"
+                : "text-secondary hover:bg-button-secondary"
+            }`}
+          >
+            Keyboard Shortcuts
           </button>
         </nav>
       </div>
@@ -39,8 +50,10 @@ function SettingsView({}: SettingsViewProps) {
       <div className="flex-1">
         {settingsView === "appearance" ? (
           <AppearanceSettings />
-        ) : (
+        ) : settingsView === "customize" ? (
           <CustomizeSettings />
+        ) : (
+          <KeyboardShortcutsSettings />
         )}
       </div>
     </div>

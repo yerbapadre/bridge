@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import type { Task, Track, ActiveTimer, TerminalSession } from "@/types";
-import { Check, Pause, Play, Ban, Star, X } from "lucide-react";
+import { Check, Pause, Play, Star, X } from "lucide-react";
+import { formatTimeOnly, getTrackName, getTrackType } from "@/lib/utils";
+import TerminalSessionCard from "@/components/TerminalSessionCard";
+import TaskListItem from "@/components/TaskListItem";
 
 interface ActiveViewProps {
   tasks: Task[];
@@ -14,8 +17,10 @@ interface ActiveViewProps {
   onUpdateTaskDescription: (taskId: string, description: string | null) => void;
   advanceTaskStatus: (taskId: string, currentStatus: Task["status"]) => void;
   switchFocusTask: (taskId: string) => void;
+  unfocusTask: () => void;
   stopCurrentTimer: () => void;
   resumeTimer: () => void;
+  openNextTaskModal: () => void;
   terminalSessions: TerminalSession[];
   openLinkTerminalModal: () => void;
   openCreateTerminalModal: () => void;
@@ -31,12 +36,14 @@ function ActiveView({
   elapsedSeconds,
   totalTimeSeconds,
   formatTime,
-  onUpdateTaskStatus,
+  onUpdateTaskStatus: _onUpdateTaskStatus,
   onUpdateTaskDescription,
   advanceTaskStatus,
   switchFocusTask,
+  unfocusTask,
   stopCurrentTimer,
   resumeTimer,
+  openNextTaskModal,
   terminalSessions,
   openLinkTerminalModal,
   openCreateTerminalModal,
@@ -55,28 +62,25 @@ function ActiveView({
     }
   }, [focusTask?.id]);
 
-  const readyTasks = tasks.filter(
-    (t) => t.status === "ready" && !t.is_current_focus
-  );
+  // Get top task from each track: prefer in-progress, fallback to ready
+  const topTasksPerTrack = tracks
+    .map((track) => {
+      const trackTasks = tasks.filter(
+        (t) => t.track_id === track.id && !t.is_current_focus && (t.status === "in_progress" || t.status === "ready")
+      );
 
-  const inProgressTasks = tasks.filter(
-    (t) => t.status === "in_progress" && !t.is_current_focus
-  );
+      if (trackTasks.length === 0) return null;
 
-  const getTrackName = (trackId: string) => {
-    const track = tracks.find((t) => t.id === trackId);
-    return track ? track.name : "Unknown Track";
-  };
+      // Sort by status (in_progress first) then by position
+      const sorted = trackTasks.sort((a, b) => {
+        if (a.status === "in_progress" && b.status !== "in_progress") return -1;
+        if (a.status !== "in_progress" && b.status === "in_progress") return 1;
+        return a.position - b.position;
+      });
 
-  const getTrackType = (trackId: string) => {
-    const track = tracks.find((t) => t.id === trackId);
-    return track?.type || "side";
-  };
-
-  const formatTimestamp = (timestamp: number) => {
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  };
+      return sorted[0];
+    })
+    .filter((t): t is Task => t !== null);
 
   return (
     <div className="flex-1 overflow-y-auto space-y-6">      {/* Focus Zone - Takes up half the screen */}
@@ -94,8 +98,8 @@ function ActiveView({
                 </h2>
                 <div className="flex items-center gap-2 text-sm text-secondary mb-4">
                   <span className="flex items-center gap-1">
-                    {getTrackName(focusTask.track_id)}
-                    {getTrackType(focusTask.track_id) === "main" && <Star size={14} className="text-star fill-star ml-0.5" />}
+                    {getTrackName(tracks, focusTask.track_id)}
+                    {getTrackType(tracks, focusTask.track_id) === "main" && <Star size={14} className="text-star fill-star ml-0.5" />}
                   </span>
                 </div>
 
@@ -187,7 +191,7 @@ function ActiveView({
                       {formatTime(elapsedSeconds)}
                     </div>
                     <div className="text-xs text-tertiary">
-                      Started {formatTimestamp(activeTimer.started_at)}
+                      Started {formatTimeOnly(activeTimer.started_at)}
                     </div>
                   </div>
                 ) : (
@@ -232,15 +236,13 @@ function ActiveView({
                       Start Timer
                     </button>
                   ))}
-                  {focusTask.status !== "done" && (
-                    <button
-                      onClick={() => onUpdateTaskStatus(focusTask.id, "blocked")}
-                      className="px-4 md:px-5 py-2.5 rounded-lg bg-button-secondary hover:bg-button-secondary-hover text-secondary font-medium text-sm flex-1 sm:flex-initial flex items-center justify-center gap-2"
-                    >
-                      <Ban size={16} />
-                      Block
-                    </button>
-                  )}
+                  <button
+                    onClick={unfocusTask}
+                    className="px-4 md:px-5 py-2.5 rounded-lg bg-button-secondary hover:bg-button-secondary-hover text-secondary font-medium text-sm flex-1 sm:flex-initial flex items-center justify-center gap-2"
+                  >
+                    <X size={16} />
+                    Unfocus
+                  </button>
                 </div>
               </div>
             </div>
@@ -278,36 +280,15 @@ function ActiveView({
               ) : (
                 <div className="space-y-2 flex-1 overflow-y-auto">
                   {terminalSessions.map((session) => (
-                    <div
+                    <TerminalSessionCard
                       key={session.id}
-                      className="bg-tertiary rounded p-2 border border-border-secondary hover:border-accent transition-colors"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium text-primary truncate">
-                            {session.window_title || "Untitled"}
-                          </div>
-                          {session.working_dir && (
-                            <div className="text-xs text-tertiary truncate mt-0.5">
-                              {session.working_dir}
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => deleteTerminalSession(session.id)}
-                          className="text-xs text-error hover:text-red-700 p-1"
-                          title="Unlink session"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                      <button
-                        onClick={() => focusTerminalSession(session)}
-                        className="mt-2 w-full text-xs px-2 py-1 bg-accent rounded text-white hover:bg-accent-hover"
-                      >
-                        Focus Terminal
-                      </button>
-                    </div>
+                      session={session}
+                      tasks={tasks}
+                      tracks={tracks}
+                      onFocus={focusTerminalSession}
+                      onDelete={deleteTerminalSession}
+                      variant="compact"
+                    />
                   ))}
                 </div>
               )}
@@ -315,89 +296,39 @@ function ActiveView({
           </div>
         </div>
       ) : (
-        <div className="bg-tertiary rounded-lg border-4 border-dashed border-border-primary p-12 text-center min-h-[33vh] flex flex-col items-center justify-center">
+        <button
+          onClick={openNextTaskModal}
+          className="w-full bg-tertiary rounded-lg border-4 border-dashed border-border-primary p-12 text-center min-h-[33vh] flex flex-col items-center justify-center hover:bg-secondary hover:border-accent transition-colors cursor-pointer"
+        >
           <p className="text-2xl text-tertiary mb-3 font-semibold">No task in focus</p>
           <p className="text-base text-quaternary">
-            Select a task below to start working on it
+            Click to select a task
           </p>
-        </div>
+        </button>
       )}
 
-      {/* Ready for Attention Queue */}
-      {readyTasks.length > 0 && (
+      {/* Ready for Attention - Top task per track */}
+      {topTasksPerTrack.length > 0 && (
         <div>
           <h3 className="text-lg font-semibold text-primary mb-3">
-            Ready for Attention ({readyTasks.length})
+            Ready for Attention
           </h3>
           <div className="space-y-2">
-            {readyTasks.map((task) => (
-              <div
+            {topTasksPerTrack.map((task) => (
+              <TaskListItem
                 key={task.id}
-                className="bg-task-card rounded-lg p-4 border border-task-card hover:border-accent transition-colors"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <p className="text-base font-medium text-primary mb-1">
-                      {task.title}
-                    </p>
-                    <p className="text-xs text-tertiary flex items-center gap-1">
-                      {getTrackName(task.track_id)}
-                      {getTrackType(task.track_id) === "main" && <Star size={12} className="text-star fill-star" />}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => switchFocusTask(task.id)}
-                    className="px-3 py-1 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary text-sm font-medium whitespace-nowrap transition-colors"
-                  >
-                    Switch to This
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Background Tasks */}
-      {inProgressTasks.length > 0 && (
-        <div>
-          <h3 className="text-lg font-semibold text-primary mb-3">
-            In Progress (Background) ({inProgressTasks.length})
-          </h3>
-          <div className="space-y-2">
-            {inProgressTasks.map((task) => (
-              <div
-                key={task.id}
-                className="bg-task-card rounded-lg p-4 border border-task-card hover:border-accent transition-colors"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="w-2 h-2 bg-status-in-progress rounded-full"></div>
-                      <p className="text-base font-medium text-primary">
-                        {task.title}
-                      </p>
-                    </div>
-                    <p className="text-xs text-tertiary flex items-center gap-1">
-                      {getTrackName(task.track_id)}
-                      {getTrackType(task.track_id) === "main" && <Star size={12} className="text-star fill-star" />}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => switchFocusTask(task.id)}
-                    className="px-3 py-1 rounded bg-button-secondary hover:bg-button-secondary-hover text-secondary text-sm font-medium whitespace-nowrap transition-colors"
-                  >
-                    Switch to This
-                  </button>
-                </div>
-              </div>
+                task={task}
+                tracks={tracks}
+                onAction={switchFocusTask}
+                showStatusIndicator
+              />
             ))}
           </div>
         </div>
       )}
 
       {/* Empty State */}
-      {!focusTask && readyTasks.length === 0 && inProgressTasks.length === 0 && (
+      {!focusTask && topTasksPerTrack.length === 0 && (
         <div className="text-center py-12 text-tertiary">
           <p className="text-lg mb-2">No active tasks</p>
           <p className="text-sm">

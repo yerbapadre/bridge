@@ -4,3 +4,4 @@ export * from "./task";
 export * from "./timer";
 export * from "./terminal";
 export * from "./theme";
+export * from "./notes";

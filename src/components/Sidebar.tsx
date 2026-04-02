@@ -1,14 +1,23 @@
 import { useState, useEffect } from "react";
-import type { Project } from "@/types";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { Project, NoteItem } from "@/types";
 
 interface SidebarProps {
   projects: Project[];
   currentProjectId: string | null;
-  currentView: "board" | "active" | "retro" | "terminals" | "settings";
+  currentView: "board" | "active" | "retro" | "terminals" | "settings" | "notes";
+  notes: NoteItem[];
+  currentNotePath: string | null;
+  collapsed: boolean;
+  setCollapsed: (collapsed: boolean) => void;
   onSelectProject: (projectId: string) => void;
   onCreateProject: (name: string) => Promise<void>;
   onUpdateProject: (id: string, name: string) => Promise<void>;
   onDeleteProject: (projectId: string) => Promise<void>;
+  onSelectNote: (path: string) => void;
+  onCreateNote: (path: string) => Promise<void>;
+  onCreateFolder: (path: string) => Promise<void>;
+  onDeleteNote: (path: string) => Promise<void>;
   onNavigateToSettings: () => void;
 }
 
@@ -16,19 +25,29 @@ export default function Sidebar({
   projects,
   currentProjectId,
   currentView,
+  notes,
+  currentNotePath,
+  collapsed,
+  setCollapsed,
   onSelectProject,
   onCreateProject,
   onUpdateProject,
   onDeleteProject,
+  onSelectNote,
+  onCreateNote,
+  onCreateFolder: _onCreateFolder,
+  onDeleteNote: _onDeleteNote,
   onNavigateToSettings,
 }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(false);
   const [projectsExpanded, setProjectsExpanded] = useState(true);
+  const [notesExpanded, setNotesExpanded] = useState(true);
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState("");
   const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null);
+  const [isAddingNote, setIsAddingNote] = useState(false);
+  const [newNoteName, setNewNoteName] = useState("");
 
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuProjectId(null);
@@ -52,6 +71,38 @@ export default function Sidebar({
     setEditingProjectName("");
   };
 
+  const handleCreateNote = async () => {
+    if (!newNoteName.trim()) return;
+    const fileName = newNoteName.endsWith(".md") ? newNoteName : `${newNoteName}.md`;
+    await onCreateNote(fileName);
+    setNewNoteName("");
+    setIsAddingNote(false);
+  };
+
+  const renderNoteTree = (items: NoteItem[], depth = 0) => {
+    return items.map((item) => (
+      <div key={item.path} style={{ marginLeft: `${depth * 12}px` }}>
+        {item.is_folder ? (
+          <div className="text-sm text-tertiary py-1 px-2 truncate">
+            📁 {item.name}
+          </div>
+        ) : (
+          <button
+            onClick={() => onSelectNote(item.path)}
+            className={`w-full text-left px-2 py-1 rounded text-sm transition-colors truncate ${
+              currentNotePath === item.path
+                ? "bg-accent font-medium"
+                : "text-secondary hover:bg-button-secondary"
+            }`}
+          >
+            📄 {item.name.replace(".md", "")}
+          </button>
+        )}
+        {item.children && renderNoteTree(item.children, depth + 1)}
+      </div>
+    ));
+  };
+
   return (
     <div
       className={`bg-sidebar border-r border-sidebar flex flex-col flex-shrink-0 h-full transition-all duration-300 ${
@@ -60,12 +111,17 @@ export default function Sidebar({
     >
       <div className={`p-4 border-b border-sidebar flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
         {!collapsed && <h2 className="font-bold text-lg text-primary">Bridge</h2>}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className={`text-tertiary hover:text-secondary transition-colors ${collapsed ? 'text-xl' : 'text-sm'}`}
-        >
-          {collapsed ? "›" : "‹"}
-        </button>
+        <Tooltip>
+          <TooltipTrigger
+            onClick={() => setCollapsed(!collapsed)}
+            className={`text-tertiary hover:text-secondary transition-colors ${collapsed ? 'text-xl' : 'text-sm'}`}
+          >
+            {collapsed ? "›" : "‹"}
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{collapsed ? "Expand" : "Collapse"} Sidebar (⌘B)</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {collapsed ? (
@@ -118,7 +174,11 @@ export default function Sidebar({
                       }`}>
                         <button
                           onClick={() => onSelectProject(project.id)}
-                          className="flex-1 text-left px-3 py-2 text-secondary"
+                          className={`flex-1 text-left px-3 py-2 truncate ${
+                            currentProjectId === project.id && currentView !== "settings"
+                              ? ""
+                              : "text-secondary"
+                          }`}
                         >
                           {project.name}
                         </button>
@@ -194,9 +254,61 @@ export default function Sidebar({
                 ) : (
                   <button
                     onClick={() => setIsAddingProject(true)}
-                    className="w-full text-left px-3 py-2 rounded text-sm text-tertiary hover:text-secondary hover:bg-button-secondary"
+                    className="w-full text-left px-3 py-2 rounded text-sm text-tertiary hover:text-secondary hover:bg-button-secondary truncate"
                   >
                     + New Project
+                  </button>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={() => setNotesExpanded(!notesExpanded)}
+              className="w-full text-left px-3 py-2 text-xs font-semibold text-tertiary hover:text-secondary flex items-center justify-between gap-2 mt-4"
+            >
+              <span>NOTES</span>
+              <span>{notesExpanded ? "▼" : "▶"}</span>
+            </button>
+
+            {notesExpanded && (
+              <div className="mt-1 ml-2">
+                {renderNoteTree(notes)}
+
+                {isAddingNote ? (
+                  <div className="flex gap-2 px-3 py-2">
+                    <input
+                      type="text"
+                      value={newNoteName}
+                      onChange={(e) => setNewNoteName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleCreateNote();
+                        if (e.key === "Escape") {
+                          setIsAddingNote(false);
+                          setNewNoteName("");
+                        }
+                      }}
+                      onBlur={() => {
+                        if (!newNoteName.trim()) {
+                          setIsAddingNote(false);
+                        }
+                      }}
+                      placeholder="Note name..."
+                      autoFocus
+                      className="flex-1 bg-input border border-input rounded px-2 py-1 text-sm text-primary"
+                    />
+                    <button
+                      onClick={handleCreateNote}
+                      className="bg-accent px-2 py-1 rounded text-xs"
+                    >
+                      Add
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setIsAddingNote(true)}
+                    className="w-full text-left px-3 py-2 rounded text-sm text-tertiary hover:text-secondary hover:bg-button-secondary truncate"
+                  >
+                    + New Note
                   </button>
                 )}
               </div>
@@ -206,25 +318,30 @@ export default function Sidebar({
       )}
 
       <div className="border-t border-sidebar p-2">
-        <button
-          onClick={onNavigateToSettings}
-          className={`w-full px-3 py-2 rounded transition-colors ${
-            collapsed ? 'text-center' : 'text-left flex items-center gap-2'
-          } ${
-            currentView === "settings"
-              ? "bg-accent font-medium"
-              : "text-secondary hover:bg-button-secondary"
-          }`}
-        >
-          {collapsed ? (
-            <span className="text-2xl">⚙</span>
-          ) : (
-            <>
+        <Tooltip>
+          <TooltipTrigger
+            onClick={onNavigateToSettings}
+            className={`w-full px-3 py-2 rounded text-sm transition-colors ${
+              collapsed ? 'text-center' : 'text-left flex items-center gap-2'
+            } ${
+              currentView === "settings"
+                ? "bg-accent font-medium"
+                : "text-secondary hover:bg-button-secondary"
+            }`}
+          >
+            {collapsed ? (
               <span className="text-2xl">⚙</span>
-              <span className="text-sm">Settings</span>
-            </>
-          )}
-        </button>
+            ) : (
+              <>
+                <span className="text-2xl">⚙</span>
+                <span className="text-sm">Settings</span>
+              </>
+            )}
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Settings (⌘,)</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
     </div>
   );

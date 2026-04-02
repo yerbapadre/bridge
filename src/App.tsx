@@ -1,18 +1,22 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { usePreferences } from "@/hooks";
+import { usePreferences, useKeyboardShortcuts } from "@/hooks";
 import { useProjectStore, useTaskStore, useFocusStore, useTerminalStore } from "@/stores";
+import { useNoteStore } from "@/stores/noteStore";
 import { formatTime } from "@/lib/theme";
 import type { GhosttyWindow, Task } from "@/types";
 import Sidebar from "@/components/Sidebar";
 import Clock from "@/components/Clock";
 import Modal from "@/components/Modal";
+import CommandPalette from "@/components/CommandPalette";
 import SettingsView from "@/views/SettingsView";
 import ActiveView from "@/views/ActiveView";
 import RetroView from "@/views/RetroView";
 import TerminalsView from "@/views/TerminalsView";
 import BoardView from "@/views/BoardView";
+import NotesView from "@/views/NotesView";
 import BlockTaskModal from "@/components/BlockTaskModal";
+import NextTaskModal from "@/components/NextTaskModal";
 
 export default function App() {
   usePreferences();
@@ -33,10 +37,12 @@ export default function App() {
   const dependencies = useTaskStore(state => state.dependencies);
   const createTrack = useTaskStore(state => state.createTrack);
   const deleteTrack = useTaskStore(state => state.deleteTrack);
+  const updateTrackName = useTaskStore(state => state.updateTrackName);
   const reorderTracks = useTaskStore(state => state.reorderTracks);
   const createTask = useTaskStore(state => state.createTask);
   const updateTaskStatus = useTaskStore(state => state.updateTaskStatus);
   const updateTaskDescription = useTaskStore(state => state.updateTaskDescription);
+  const updateTaskTitle = useTaskStore(state => state.updateTaskTitle);
   const deleteTask = useTaskStore(state => state.deleteTask);
   const reorderTasks = useTaskStore(state => state.reorderTasks);
   const addDependency = useTaskStore(state => state.addDependency);
@@ -54,6 +60,7 @@ export default function App() {
   const elapsedSeconds = useFocusStore(state => state.elapsedSeconds);
   const totalTimeSeconds = useFocusStore(state => state.totalTimeSeconds);
   const switchFocusTask = useFocusStore(state => state.switchFocusTask);
+  const unfocusTask = useFocusStore(state => state.unfocusTask);
   const stopCurrentTimer = useFocusStore(state => state.stopCurrentTimer);
   const resumeTimer = useFocusStore(state => state.resumeTimer);
   const syncFocusFromTasks = useFocusStore(state => state.syncFocusFromTasks);
@@ -72,6 +79,14 @@ export default function App() {
   const terminalsError = useTerminalStore(state => state.error);
   const setTerminalsError = useTerminalStore(state => state.setError);
 
+  const notes = useNoteStore(state => state.notes);
+  const currentNotePath = useNoteStore(state => state.currentNotePath);
+  const loadNotes = useNoteStore(state => state.loadNotes);
+  const loadNote = useNoteStore(state => state.loadNote);
+  const createNote = useNoteStore(state => state.createNote);
+  const deleteNote = useNoteStore(state => state.deleteNote);
+  const createFolder = useNoteStore(state => state.createFolder);
+
   // Compute derived state
   const mainTrack = tracks.find(t => t.type === 'main');
   const sideTracks = tracks.filter(t => t.type === 'side');
@@ -88,7 +103,8 @@ export default function App() {
     const loadAllTerminalSessions = useTerminalStore.getState().loadAllTerminalSessions;
     loadProjects();
     loadAllTerminalSessions();
-  }, []);
+    loadNotes();
+  }, [loadNotes]);
 
   // Load tasks and focus when project changes
   useEffect(() => {
@@ -113,7 +129,9 @@ export default function App() {
     }
   }, [focusTask]);
 
-  const [currentView, setCurrentView] = useState<"board" | "active" | "retro" | "terminals" | "settings">("active");
+  const [currentView, setCurrentView] = useState<"board" | "active" | "retro" | "terminals" | "settings" | "notes">("active");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [deleteConfirmProjectId, setDeleteConfirmProjectId] = useState<string | null>(null);
   const [deleteConfirmTaskCount, setDeleteConfirmTaskCount] = useState(0);
   const [deleteConfirmTrackId, setDeleteConfirmTrackId] = useState<string | null>(null);
@@ -126,6 +144,7 @@ export default function App() {
   const [newTerminalWorkingDir, setNewTerminalWorkingDir] = useState("");
   const [newTerminalInitialCmd, setNewTerminalInitialCmd] = useState("");
   const [saveAsProjectRoot, setSaveAsProjectRoot] = useState(false);
+  const [showNextTaskModal, setShowNextTaskModal] = useState(false);
 
   const error = projectsError || tasksError || focusError || terminalsError;
   const setError = (e: string | null) => {
@@ -186,9 +205,19 @@ export default function App() {
     await createTrack(name, currentProjectId);
   };
 
+  const handleUpdateTrackName = async (trackId: string, name: string) => {
+    if (!currentProjectId) return;
+    await updateTrackName(trackId, name, currentProjectId);
+  };
+
   const handleCreateTask = async (trackId: string, title: string, parentTaskId: string | null) => {
     if (!currentProjectId) return;
     await createTask(trackId, title, parentTaskId, currentProjectId);
+  };
+
+  const handleUpdateTaskTitle = async (taskId: string, title: string) => {
+    if (!currentProjectId) return;
+    await updateTaskTitle(taskId, title, currentProjectId);
   };
 
   const handleReorderTracks = async (trackId: string, newPosition: number) => {
@@ -272,6 +301,32 @@ export default function App() {
     await loadTaskData(currentProjectId);
   };
 
+  const handleUnfocusTask = async () => {
+    if (!currentProjectId) return;
+    await unfocusTask(currentProjectId);
+    await loadTaskData(currentProjectId);
+  };
+
+  const handleSelectNote = async (path: string) => {
+    await loadNote(path);
+    setCurrentView("notes");
+  };
+
+  const handleCreateNote = async (path: string) => {
+    await createNote(path);
+    await loadNotes();
+  };
+
+  const handleCreateFolder = async (path: string) => {
+    await createFolder(path);
+    await loadNotes();
+  };
+
+  const handleDeleteNote = async (path: string) => {
+    await deleteNote(path);
+    await loadNotes();
+  };
+
   // Wrapper functions to inject currentProjectId
   const wrappedUpdateTaskStatus = async (taskId: string, status: Task["status"]) => {
     if (!currentProjectId) return;
@@ -288,10 +343,19 @@ export default function App() {
 
   const wrappedAdvanceTaskStatus = async (taskId: string, currentStatus: Task["status"]) => {
     if (!currentProjectId) return;
+
+    // Check if we're completing the currently focused task
+    const isCompletingFocusedTask = currentStatus === "in_progress" && focusTask?.id === taskId;
+
     await advanceTaskStatus(taskId, currentStatus, currentProjectId);
     // Reload focus task to reflect status change
     const loadFocusAndTimer = useFocusStore.getState().loadFocusAndTimer;
     await loadFocusAndTimer(currentProjectId);
+
+    // After completing the focused task, show the next task modal
+    if (isCompletingFocusedTask) {
+      setShowNextTaskModal(true);
+    }
   };
 
   const wrappedUpdateTaskDescription = async (taskId: string, description: string | null) => {
@@ -304,16 +368,190 @@ export default function App() {
     await addDependency(taskId, blocksTaskId, currentProjectId);
   };
 
+  // Command palette execution handler
+  const handleExecuteCommand = useCallback((commandId: string, payload?: any) => {
+    // Global commands
+    if (commandId === "openCommandPalette") {
+      setShowCommandPalette(true);
+    } else if (commandId === "toggleSidebar") {
+      setSidebarCollapsed(prev => !prev);
+    } else if (commandId === "openSettings") {
+      setCurrentView("settings");
+    } else if (commandId === "closeModal") {
+      setShowCommandPalette(false);
+      setShowLinkTerminalModal(false);
+      setShowCreateTerminalModal(false);
+      setBlockModalTaskId(null);
+      setShowNextTaskModal(false);
+    }
+
+    // Navigation commands
+    else if (commandId === "goToActiveView") {
+      setCurrentView("active");
+    } else if (commandId === "goToBoardView") {
+      setCurrentView("board");
+    } else if (commandId === "goToTerminalsView") {
+      setCurrentView("terminals");
+    } else if (commandId === "goToRetroView") {
+      setCurrentView("retro");
+    } else if (commandId === "goToNotesView") {
+      setCurrentView("notes");
+    }
+
+    // Project commands
+    else if (commandId === "quickSwitchProject") {
+      setShowCommandPalette(true);
+    } else if (commandId === "newProject") {
+      // Trigger sidebar's new project flow - not ideal but works for now
+      const event = new CustomEvent("bridge:newProject");
+      window.dispatchEvent(event);
+    } else if (commandId.startsWith("switchProject:")) {
+      const projectId = payload?.projectId;
+      if (projectId) {
+        handleSelectProject(projectId);
+      }
+    }
+
+    // Focus task commands
+    else if (commandId === "advanceFocusTask" && focusTask) {
+      wrappedAdvanceTaskStatus(focusTask.id, focusTask.status);
+    } else if (commandId === "markFocusReady" && focusTask) {
+      wrappedUpdateTaskStatus(focusTask.id, "ready");
+    } else if (commandId === "markFocusInProgress" && focusTask) {
+      wrappedUpdateTaskStatus(focusTask.id, "in_progress");
+    } else if (commandId === "markFocusDone" && focusTask) {
+      wrappedUpdateTaskStatus(focusTask.id, "done");
+    } else if (commandId === "markFocusBlocked" && focusTask) {
+      wrappedUpdateTaskStatus(focusTask.id, "blocked");
+    } else if (commandId.startsWith("switchFocusTask:")) {
+      const taskId = payload?.taskId;
+      if (taskId) {
+        handleSwitchFocusTask(taskId);
+      }
+    }
+
+    // Timer commands
+    else if (commandId === "startTimer" && focusTask && !activeTimer) {
+      resumeTimer();
+    } else if (commandId === "stopTimer" && activeTimer) {
+      stopCurrentTimer();
+    }
+
+    // Task commands
+    else if (commandId === "newTask") {
+      // Trigger appropriate new task flow based on view
+      if (currentView === "board" && mainTrack) {
+        const event = new CustomEvent("bridge:newTask", { detail: { trackId: mainTrack.id } });
+        window.dispatchEvent(event);
+      }
+    }
+
+    // Terminal commands
+    else if (commandId === "createTerminal" && focusTask) {
+      handleOpenCreateTerminalModal();
+    } else if (commandId === "linkTerminal" && focusTask) {
+      handleOpenLinkTerminalModal();
+    }
+
+    // Notes commands
+    else if (commandId === "newNote") {
+      const event = new CustomEvent("bridge:newNote");
+      window.dispatchEvent(event);
+    } else if (commandId.startsWith("openNote:")) {
+      const notePath = payload?.notePath;
+      if (notePath) {
+        handleSelectNote(notePath);
+      }
+    }
+
+    // Track commands
+    else if (commandId === "newTrack" && currentView === "board") {
+      const event = new CustomEvent("bridge:newTrack");
+      window.dispatchEvent(event);
+    }
+  }, [
+    currentView,
+    focusTask,
+    activeTimer,
+    mainTrack,
+    handleSelectProject,
+    wrappedAdvanceTaskStatus,
+    wrappedUpdateTaskStatus,
+    handleSwitchFocusTask,
+    resumeTimer,
+    stopCurrentTimer,
+    handleOpenCreateTerminalModal,
+    handleOpenLinkTerminalModal,
+    handleSelectNote
+  ]);
+
+  // Setup keyboard shortcuts
+  useKeyboardShortcuts([
+    // Global
+    { keys: ["Cmd", "K"], handler: () => setShowCommandPalette(true) },
+    { keys: ["Cmd", "B"], handler: () => setSidebarCollapsed(prev => !prev) },
+    { keys: ["Cmd", ","], handler: () => setCurrentView("settings") },
+    { keys: ["Escape"], handler: () => handleExecuteCommand("closeModal"), preventDefault: false },
+
+    // Navigation
+    { keys: ["1"], handler: () => setCurrentView("active") },
+    { keys: ["Cmd", "1"], handler: () => setCurrentView("active") },
+    { keys: ["2"], handler: () => setCurrentView("board") },
+    { keys: ["Cmd", "2"], handler: () => setCurrentView("board") },
+    { keys: ["3"], handler: () => setCurrentView("terminals") },
+    { keys: ["Cmd", "3"], handler: () => setCurrentView("terminals") },
+    { keys: ["4"], handler: () => setCurrentView("retro") },
+    { keys: ["Cmd", "4"], handler: () => setCurrentView("retro") },
+    { keys: ["5"], handler: () => setCurrentView("notes") },
+    { keys: ["Cmd", "5"], handler: () => setCurrentView("notes") },
+
+    // Project
+    { keys: ["Cmd", "P"], handler: () => setShowCommandPalette(true) },
+    { keys: ["Cmd", "N"], handler: () => handleExecuteCommand("newProject") },
+
+    // Focus task
+    { keys: ["Space"], handler: () => handleExecuteCommand("advanceFocusTask"), condition: () => !!focusTask },
+    { keys: ["R"], handler: () => handleExecuteCommand("markFocusReady"), condition: () => !!focusTask },
+    { keys: ["I"], handler: () => handleExecuteCommand("markFocusInProgress"), condition: () => !!focusTask },
+    { keys: ["Cmd", "Enter"], handler: () => handleExecuteCommand("markFocusDone"), condition: () => !!focusTask },
+    { keys: ["B"], handler: () => handleExecuteCommand("markFocusBlocked"), condition: () => !!focusTask },
+
+    // Timer
+    { keys: ["T"], handler: () => handleExecuteCommand("startTimer"), condition: () => !!focusTask && !activeTimer },
+    { keys: ["Shift", "T"], handler: () => handleExecuteCommand("stopTimer"), condition: () => !!activeTimer },
+
+    // Task
+    { keys: ["N"], handler: () => handleExecuteCommand("newTask"), condition: () => !!currentProjectId },
+
+    // Terminal
+    { keys: ["Cmd", "T"], handler: () => handleExecuteCommand("createTerminal"), condition: () => !!focusTask },
+    { keys: ["Cmd", "Shift", "L"], handler: () => handleExecuteCommand("linkTerminal"), condition: () => !!focusTask },
+
+    // Notes
+    { keys: ["Cmd", "Shift", "N"], handler: () => handleExecuteCommand("newNote") },
+
+    // Track
+    { keys: ["Cmd", "Shift", "T"], handler: () => handleExecuteCommand("newTrack"), condition: () => currentView === "board" }
+  ]);
+
   return (
     <div className="h-screen flex overflow-hidden">
       <Sidebar
         projects={projects}
         currentProjectId={currentProjectId}
         currentView={currentView}
+        notes={notes}
+        currentNotePath={currentNotePath}
+        collapsed={sidebarCollapsed}
+        setCollapsed={setSidebarCollapsed}
         onSelectProject={handleSelectProject}
         onCreateProject={handleCreateProject}
         onUpdateProject={handleUpdateProject}
         onDeleteProject={handleDeleteProject}
+        onSelectNote={handleSelectNote}
+        onCreateNote={handleCreateNote}
+        onCreateFolder={handleCreateFolder}
+        onDeleteNote={handleDeleteNote}
         onNavigateToSettings={() => setCurrentView("settings")}
       />
 
@@ -321,10 +559,10 @@ export default function App() {
         <div className="mb-6 flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold mb-2 text-primary">
-              {currentView === "settings" ? "Settings" : currentProject?.name || "Bridge"}
+              {currentView === "settings" ? "Settings" : currentView === "notes" ? "Notes" : currentProject?.name || "Bridge"}
             </h1>
             <p className="text-sm text-tertiary">
-              {currentView === "settings" ? "Customize your application" : "Parallelization Command Center"}
+              {currentView === "settings" ? "Customize your application" : currentView === "notes" ? "Capture your thoughts" : "Parallelization Command Center"}
             </p>
           </div>
           <div className="text-right">
@@ -339,46 +577,66 @@ export default function App() {
 
         {currentView !== "settings" && (
           <div className="flex gap-2 mb-6 border-b border-sidebar">
-            <button
-              onClick={() => setCurrentView("active")}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                currentView === "active"
-                  ? "text-accent border-b-2 border-accent"
-                  : "text-tertiary hover:text-secondary"
-              }`}
-            >
-              Active View
-            </button>
-            <button
-              onClick={() => setCurrentView("board")}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                currentView === "board"
-                  ? "text-accent border-b-2 border-accent"
-                  : "text-tertiary hover:text-secondary"
-              }`}
-            >
-              Board View
-            </button>
-            <button
-              onClick={() => setCurrentView("terminals")}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                currentView === "terminals"
-                  ? "text-accent border-b-2 border-accent"
-                  : "text-tertiary hover:text-secondary"
-              }`}
-            >
-              Terminals
-            </button>
-            <button
-              onClick={() => setCurrentView("retro")}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                currentView === "retro"
-                  ? "text-accent border-b-2 border-accent"
-                  : "text-tertiary hover:text-secondary"
-              }`}
-            >
-              Retro
-            </button>
+            <Tooltip>
+              <TooltipTrigger
+                onClick={() => setCurrentView("active")}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  currentView === "active"
+                    ? "text-accent border-b-2 border-accent"
+                    : "text-tertiary hover:text-secondary"
+                }`}
+              >
+                Active View
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Active View (1)</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                onClick={() => setCurrentView("board")}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  currentView === "board"
+                    ? "text-accent border-b-2 border-accent"
+                    : "text-tertiary hover:text-secondary"
+                }`}
+              >
+                Board View
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Board View (2)</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                onClick={() => setCurrentView("terminals")}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  currentView === "terminals"
+                    ? "text-accent border-b-2 border-accent"
+                    : "text-tertiary hover:text-secondary"
+                }`}
+              >
+                Terminals
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Terminals View (3)</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                onClick={() => setCurrentView("retro")}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  currentView === "retro"
+                    ? "text-accent border-b-2 border-accent"
+                    : "text-tertiary hover:text-secondary"
+                }`}
+              >
+                Retro
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Retro View (4)</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         )}
 
@@ -418,6 +676,8 @@ export default function App() {
 
         {currentView === "settings" ? (
           <SettingsView />
+        ) : currentView === "notes" ? (
+          <NotesView />
         ) : currentView === "retro" ? (
           <RetroView tasks={tasks} tracks={tracks} />
         ) : currentView === "terminals" ? (
@@ -441,9 +701,11 @@ export default function App() {
             isTrackComplete={isTrackComplete}
             onCreateTrack={handleCreateTrack}
             onDeleteTrack={handleDeleteTrack}
+            onUpdateTrackName={handleUpdateTrackName}
             onReorderTracks={handleReorderTracks}
             onCreateTask={handleCreateTask}
             onUpdateTaskStatus={wrappedUpdateTaskStatus}
+            onUpdateTaskTitle={handleUpdateTaskTitle}
             onDeleteTask={wrappedDeleteTask}
             onReorderTasks={handleReorderTasks}
             advanceTaskStatus={wrappedAdvanceTaskStatus}
@@ -463,8 +725,10 @@ export default function App() {
             onUpdateTaskDescription={wrappedUpdateTaskDescription}
             advanceTaskStatus={wrappedAdvanceTaskStatus}
             switchFocusTask={handleSwitchFocusTask}
+            unfocusTask={handleUnfocusTask}
             stopCurrentTimer={stopCurrentTimer}
             resumeTimer={resumeTimer}
+            openNextTaskModal={() => setShowNextTaskModal(true)}
             terminalSessions={terminalSessions}
             openLinkTerminalModal={handleOpenLinkTerminalModal}
             openCreateTerminalModal={handleOpenCreateTerminalModal}
@@ -485,51 +749,54 @@ export default function App() {
         />
       )}
 
-      <Modal isOpen={showLinkTerminalModal} onClose={() => setShowLinkTerminalModal(false)}>
-        <h3 className="text-lg font-bold text-primary mb-4">Link Ghostty Window</h3>
+      {showLinkTerminalModal && (
+        <Modal isOpen onClose={() => setShowLinkTerminalModal(false)}>
+          <h3 className="text-lg font-bold text-primary mb-4">Link Ghostty Window</h3>
 
-        {availableWindows.length === 0 ? (
-          <div className="text-sm text-quaternary text-center py-6">
-            No Ghostty windows found.
-            <br />
-            Make sure Ghostty is running.
-          </div>
-        ) : (
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {availableWindows.map((window) => (
-              <button
-                key={window.id}
-                onClick={() => handleLinkTerminalWindow(window)}
-                className="w-full text-left p-3 bg-secondary hover:bg-quaternary rounded border border-border-secondary hover:border-accent transition-colors"
-              >
-                <div className="text-sm font-medium text-primary">
-                  {window.title}
-                </div>
-                <div className="text-xs text-tertiary mt-1">
-                  ID: {window.id}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
+          {availableWindows.length === 0 ? (
+            <div className="text-sm text-quaternary text-center py-6">
+              No Ghostty windows found.
+              <br />
+              Make sure Ghostty is running.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {availableWindows.map((window) => (
+                <button
+                  key={window.id}
+                  onClick={() => handleLinkTerminalWindow(window)}
+                  className="w-full text-left p-3 bg-secondary hover:bg-quaternary rounded border border-border-secondary hover:border-accent transition-colors"
+                >
+                  <div className="text-sm font-medium text-primary">
+                    {window.title}
+                  </div>
+                  <div className="text-xs text-tertiary mt-1">
+                    ID: {window.id}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
 
-        <button
-          onClick={() => setShowLinkTerminalModal(false)}
-          className="mt-4 w-full px-4 py-2 bg-button-secondary hover:bg-button-secondary-hover text-secondary rounded"
+          <button
+            onClick={() => setShowLinkTerminalModal(false)}
+            className="mt-4 w-full px-4 py-2 bg-button-secondary hover:bg-button-secondary-hover text-secondary rounded"
+          >
+            Cancel
+          </button>
+        </Modal>
+      )}
+
+      {showCreateTerminalModal && (
+        <Modal
+          isOpen
+          onClose={() => {
+            setShowCreateTerminalModal(false);
+            setNewTerminalWorkingDir("");
+            setNewTerminalInitialCmd("");
+            setCreateTerminalTaskId(null);
+          }}
         >
-          Cancel
-        </button>
-      </Modal>
-
-      <Modal
-        isOpen={showCreateTerminalModal}
-        onClose={() => {
-          setShowCreateTerminalModal(false);
-          setNewTerminalWorkingDir("");
-          setNewTerminalInitialCmd("");
-          setCreateTerminalTaskId(null);
-        }}
-      >
         <h3 className="text-lg font-bold text-primary mb-4">
           Create New Terminal
           {createTerminalTaskId && tasks.find(t => t.id === createTerminalTaskId) && (
@@ -615,10 +882,12 @@ export default function App() {
             Cancel
           </button>
         </div>
-      </Modal>
+        </Modal>
+      )}
 
-      <Modal
-        isOpen={!!deleteConfirmProjectId}
+      {deleteConfirmProjectId && (
+        <Modal
+          isOpen
         onClose={() => {
           setDeleteConfirmProjectId(null);
           setDeleteConfirmTaskCount(0);
@@ -659,15 +928,26 @@ export default function App() {
             Delete Project
           </button>
         </div>
-      </Modal>
+        </Modal>
+      )}
 
-      <Modal
-        isOpen={!!deleteConfirmTrackId}
-        onClose={() => {
-          setDeleteConfirmTrackId(null);
-          setDeleteConfirmTrackTaskCount(0);
-        }}
-      >
+      {showNextTaskModal && (
+        <NextTaskModal
+          tasks={tasks}
+          tracks={tracks}
+          onClose={() => setShowNextTaskModal(false)}
+          onSelectTask={handleSwitchFocusTask}
+        />
+      )}
+
+      {deleteConfirmTrackId && (
+        <Modal
+          isOpen
+          onClose={() => {
+            setDeleteConfirmTrackId(null);
+            setDeleteConfirmTrackTaskCount(0);
+          }}
+        >
         <h2 className="text-xl font-semibold mb-4 text-primary">Delete Track</h2>
 
         {deleteConfirmTrackTaskCount > 0 ? (
@@ -703,7 +983,21 @@ export default function App() {
             Delete Track
           </button>
         </div>
-      </Modal>
+        </Modal>
+      )}
+
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onExecuteCommand={handleExecuteCommand}
+        projects={projects}
+        tasks={tasks}
+        notes={notes}
+        currentView={currentView}
+        focusTask={focusTask}
+        activeTimer={activeTimer}
+        currentProjectId={currentProjectId}
+      />
     </div>
   );
 }

@@ -6,11 +6,13 @@ use db::{ActiveTimer, CreateProjectInput, CreateTaskInput, CreateTerminalSession
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::{Manager, State};
+use std::fs;
 
 struct AppState {
     db: Arc<Database>,
     prefs_path: PathBuf,
     prefs: Arc<Mutex<UserPreferences>>,
+    notes_dir: PathBuf,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -488,6 +490,8 @@ fn create_ghostty_window(
             terminal_uuid: Some(terminal_uuid),
             window_title: Some(window_title),
             working_dir: Some(working_dir),
+            session_type: "manual".to_string(),
+            ai_command: None,
         }).map_err(|e| e.to_string())?;
 
         Ok(session)
@@ -497,6 +501,192 @@ fn create_ghostty_window(
     {
         Err("Ghostty AppleScript is only supported on macOS".to_string())
     }
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct NoteItem {
+    path: String,
+    name: String,
+    is_folder: bool,
+    children: Option<Vec<NoteItem>>,
+}
+
+fn get_notes_dir(state: &State<AppState>) -> PathBuf {
+    state.notes_dir.clone()
+}
+
+fn sanitize_note_path(notes_dir: &PathBuf, relative_path: &str) -> Result<PathBuf, String> {
+    let full_path = notes_dir.join(relative_path);
+
+    // Ensure the path is within the notes directory (prevent path traversal)
+    let canonical_notes_dir = notes_dir.canonicalize()
+        .map_err(|e| format!("Failed to canonicalize notes directory: {}", e))?;
+
+    if let Ok(canonical_path) = full_path.canonicalize() {
+        if !canonical_path.starts_with(&canonical_notes_dir) {
+            return Err("Invalid path: outside notes directory".to_string());
+        }
+    } else {
+        // For new files that don't exist yet, check the parent
+        if let Some(parent) = full_path.parent() {
+            if parent.exists() {
+                let canonical_parent = parent.canonicalize()
+                    .map_err(|e| format!("Failed to canonicalize parent: {}", e))?;
+                if !canonical_parent.starts_with(&canonical_notes_dir) {
+                    return Err("Invalid path: outside notes directory".to_string());
+                }
+            }
+        }
+    }
+
+    Ok(full_path)
+}
+
+fn build_note_tree(dir: &PathBuf, relative_to: &PathBuf) -> Result<Vec<NoteItem>, String> {
+    let mut items = Vec::new();
+
+    let entries = fs::read_dir(dir)
+        .map_err(|e| format!("Failed to read directory: {}", e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+        let path = entry.path();
+        let file_name = entry.file_name().to_string_lossy().to_string();
+
+        // Skip hidden files
+        if file_name.starts_with('.') {
+            continue;
+        }
+
+        let is_folder = path.is_dir();
+        let relative_path = path.strip_prefix(relative_to)
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+
+        let children = if is_folder {
+            Some(build_note_tree(&path, relative_to)?)
+        } else if file_name.ends_with(".md") {
+            None
+        } else {
+            // Skip non-markdown files
+            continue;
+        };
+
+        items.push(NoteItem {
+            path: relative_path,
+            name: file_name,
+            is_folder,
+            children,
+        });
+    }
+
+    // Sort: folders first, then files, both alphabetically
+    items.sort_by(|a, b| {
+        match (a.is_folder, b.is_folder) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        }
+    });
+
+    Ok(items)
+}
+
+#[tauri::command]
+fn list_notes(state: State<AppState>) -> Result<Vec<NoteItem>, String> {
+    let notes_dir = get_notes_dir(&state);
+
+    // Ensure notes directory exists
+    if !notes_dir.exists() {
+        fs::create_dir_all(&notes_dir)
+            .map_err(|e| format!("Failed to create notes directory: {}", e))?;
+    }
+
+    build_note_tree(&notes_dir, &notes_dir)
+}
+
+#[tauri::command]
+fn read_note(state: State<AppState>, path: String) -> Result<String, String> {
+    let notes_dir = get_notes_dir(&state);
+    let full_path = sanitize_note_path(&notes_dir, &path)?;
+
+    fs::read_to_string(full_path)
+        .map_err(|e| format!("Failed to read note: {}", e))
+}
+
+#[tauri::command]
+fn write_note(state: State<AppState>, path: String, content: String) -> Result<(), String> {
+    let notes_dir = get_notes_dir(&state);
+    let full_path = sanitize_note_path(&notes_dir, &path)?;
+
+    // Ensure parent directory exists
+    if let Some(parent) = full_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+    }
+
+    fs::write(full_path, content)
+        .map_err(|e| format!("Failed to write note: {}", e))
+}
+
+#[tauri::command]
+fn create_note(state: State<AppState>, path: String) -> Result<(), String> {
+    let notes_dir = get_notes_dir(&state);
+    let full_path = sanitize_note_path(&notes_dir, &path)?;
+
+    // Ensure parent directory exists
+    if let Some(parent) = full_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+    }
+
+    // Create empty file if it doesn't exist
+    if !full_path.exists() {
+        fs::write(full_path, "")
+            .map_err(|e| format!("Failed to create note: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_note(state: State<AppState>, path: String) -> Result<(), String> {
+    let notes_dir = get_notes_dir(&state);
+    let full_path = sanitize_note_path(&notes_dir, &path)?;
+
+    if full_path.is_dir() {
+        fs::remove_dir_all(full_path)
+            .map_err(|e| format!("Failed to delete folder: {}", e))
+    } else {
+        fs::remove_file(full_path)
+            .map_err(|e| format!("Failed to delete note: {}", e))
+    }
+}
+
+#[tauri::command]
+fn create_folder(state: State<AppState>, path: String) -> Result<(), String> {
+    let notes_dir = get_notes_dir(&state);
+    let full_path = sanitize_note_path(&notes_dir, &path)?;
+
+    fs::create_dir_all(full_path)
+        .map_err(|e| format!("Failed to create folder: {}", e))
+}
+
+#[tauri::command]
+fn rename_note(state: State<AppState>, old_path: String, new_path: String) -> Result<(), String> {
+    let notes_dir = get_notes_dir(&state);
+    let old_full_path = sanitize_note_path(&notes_dir, &old_path)?;
+    let new_full_path = sanitize_note_path(&notes_dir, &new_path)?;
+
+    // Ensure parent directory exists for new path
+    if let Some(parent) = new_full_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+    }
+
+    fs::rename(old_full_path, new_full_path)
+        .map_err(|e| format!("Failed to rename note: {}", e))
 }
 
 fn main() {
@@ -514,11 +704,13 @@ fn main() {
 
             let prefs_path = app_dir.join("preferences.json");
             let prefs = db::load_preferences(&prefs_path);
+            let notes_dir = app_dir.join("notes");
 
             app.manage(AppState {
                 db: Arc::new(db),
                 prefs_path,
                 prefs: Arc::new(Mutex::new(prefs)),
+                notes_dir,
             });
 
             Ok(())
@@ -565,6 +757,13 @@ fn main() {
             focus_ghostty_window,
             list_ghostty_windows,
             create_ghostty_window,
+            list_notes,
+            read_note,
+            write_note,
+            create_note,
+            delete_note,
+            create_folder,
+            rename_note,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -10,6 +10,7 @@ import type {
   UserPreferences,
   SavedTheme,
   ColorPreferences,
+  NoteItem,
 } from "@/types";
 
 // Projects
@@ -75,6 +76,14 @@ export async function reorderTracks(
   return invoke("reorder_tracks", { projectId, trackId, newPosition });
 }
 
+export async function updateTrack(
+  id: string,
+  name: string,
+  color: string | null
+): Promise<Track> {
+  return invoke<Track>("update_track", { id, name, color });
+}
+
 // Tasks
 export async function getTasks(trackId: string | null): Promise<Task[]> {
   return invoke<Task[]>("get_tasks", { trackId });
@@ -132,6 +141,10 @@ export async function getFocusTask(projectId: string): Promise<Task | null> {
 
 export async function setFocusTask(projectId: string, taskId: string): Promise<Task> {
   return invoke<Task>("set_focus_task", { projectId, taskId });
+}
+
+export async function clearFocusTask(projectId: string): Promise<void> {
+  return invoke("clear_focus", { projectId });
 }
 
 export async function getActiveTimer(): Promise<ActiveTimer | null> {
@@ -218,4 +231,33 @@ export async function saveTheme(
 
 export async function deleteTheme(id: string): Promise<void> {
   return invoke("delete_theme", { id });
+}
+
+// Notes
+export async function listNotes(): Promise<NoteItem[]> {
+  return invoke<NoteItem[]>("list_notes");
+}
+
+export async function readNote(path: string): Promise<string> {
+  return invoke<string>("read_note", { path });
+}
+
+export async function writeNote(path: string, content: string): Promise<void> {
+  return invoke("write_note", { path, content });
+}
+
+export async function createNote(path: string): Promise<void> {
+  return invoke("create_note", { path });
+}
+
+export async function deleteNote(path: string): Promise<void> {
+  return invoke("delete_note", { path });
+}
+
+export async function createFolder(path: string): Promise<void> {
+  return invoke("create_folder", { path });
+}
+
+export async function renameNote(oldPath: string, newPath: string): Promise<void> {
+  return invoke("rename_note", { oldPath, newPath });
 }

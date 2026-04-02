@@ -1,38 +1,8 @@
 import { useState } from "react";
 import Modal from "./Modal";
-
-interface Task {
-  id: string;
-  track_id: string;
-  title: string;
-  description: string | null;
-  status: "blocked" | "ready" | "in_progress" | "done";
-  position: number;
-  parent_task_id: string | null;
-  depth: number;
-  created_at: number;
-  updated_at: number;
-  completed_at: number | null;
-  is_current_focus: boolean;
-}
-
-interface Track {
-  id: string;
-  project_id: string;
-  name: string;
-  type: "main" | "side";
-  color: string | null;
-  position: number;
-  created_at: number;
-  updated_at: number;
-}
-
-interface TaskDependency {
-  id: string;
-  task_id: string;
-  blocks_task_id: string;
-  created_at: number;
-}
+import StatusBadge from "./StatusBadge";
+import type { Task, Track, TaskDependency } from "@/types";
+import { getTrackName } from "@/lib/utils";
 
 interface BlockTaskModalProps {
   taskId: string;
@@ -52,8 +22,8 @@ export default function BlockTaskModal({
   onAddDependency,
 }: BlockTaskModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const task = tasks.find((t) => t.id === taskId);
 
+  const task = tasks.find((t) => t.id === taskId);
   if (!task) return null;
 
   const sameTrackTasks = tasks.filter(
@@ -72,17 +42,13 @@ export default function BlockTaskModal({
       )
     : sameTrackTasks;
 
-  const getTrackName = (trackId: string) => {
-    return tracks.find((t) => t.id === trackId)?.name || "Unknown";
-  };
-
   const handleSelectTask = async (blockerTaskId: string) => {
     await onAddDependency(blockerTaskId, taskId);
     onClose();
   };
 
   return (
-    <Modal isOpen={true} onClose={onClose} maxWidth="2xl">
+    <Modal isOpen onClose={onClose} maxWidth="2xl">
       <div className="mb-4">
         <h2 className="text-xl font-bold text-primary mb-2">Add Blocking Task</h2>
         <p className="text-sm text-secondary">
@@ -105,7 +71,7 @@ export default function BlockTaskModal({
         {!searchQuery && sameTrackTasks.length > 0 && (
           <div className="mb-4">
             <h3 className="text-sm font-semibold text-tertiary mb-2">
-              Tasks in {getTrackName(task.track_id)}
+              Tasks in {getTrackName(tracks, task.track_id)}
             </h3>
             <div className="space-y-2">
               {sameTrackTasks.map((t) => (
@@ -120,14 +86,7 @@ export default function BlockTaskModal({
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-0.5 rounded ${
-                      t.status === "blocked" ? "bg-status-blocked" :
-                      t.status === "ready" ? "bg-status-ready" :
-                      t.status === "in_progress" ? "bg-status-in-progress" :
-                      "bg-status-done"
-                    } text-white`}>
-                      {t.status}
-                    </span>
+                    <StatusBadge status={t.status} />
                     <span className="text-sm font-medium text-primary">{t.title}</span>
                     {existingBlockers.includes(t.id) && (
                       <span className="ml-auto text-xs text-tertiary">Already blocking</span>
@@ -158,20 +117,13 @@ export default function BlockTaskModal({
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs px-2 py-0.5 rounded ${
-                        t.status === "blocked" ? "bg-status-blocked" :
-                        t.status === "ready" ? "bg-status-ready" :
-                        t.status === "in_progress" ? "bg-status-in-progress" :
-                        "bg-status-done"
-                      } text-white`}>
-                        {t.status}
-                      </span>
+                      <StatusBadge status={t.status} />
                       <span className="text-sm font-medium text-primary">{t.title}</span>
                       {existingBlockers.includes(t.id) && (
                         <span className="ml-auto text-xs text-tertiary">Already blocking</span>
                       )}
                     </div>
-                    <p className="text-xs text-tertiary">{getTrackName(t.track_id)}</p>
+                    <p className="text-xs text-tertiary">{getTrackName(tracks, t.track_id)}</p>
                   </button>
                 ))}
               </div>

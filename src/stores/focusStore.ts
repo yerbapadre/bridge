@@ -11,6 +11,7 @@ interface FocusStore {
   error: string | null;
   loadFocusAndTimer: (projectId: string) => Promise<void>;
   switchFocusTask: (projectId: string, taskId: string) => Promise<void>;
+  unfocusTask: (projectId: string) => Promise<void>;
   stopCurrentTimer: () => Promise<void>;
   resumeTimer: () => Promise<void>;
   syncFocusFromTasks: (tasks: Task[]) => void;
@@ -57,7 +58,11 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
         updates.elapsedSeconds = now - activeTimerData.started_at;
 
         const id = window.setInterval(() => {
-          set((state) => ({ elapsedSeconds: state.elapsedSeconds + 1 }));
+          const { activeTimer } = get();
+          if (activeTimer) {
+            const currentTime = Math.floor(Date.now() / 1000);
+            set({ elapsedSeconds: currentTime - activeTimer.started_at });
+          }
         }, 1000);
 
         updates.timerInterval = id;
@@ -90,7 +95,11 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
       const newTimer = await api.startTimer(taskId);
 
       const id = window.setInterval(() => {
-        set((state) => ({ elapsedSeconds: state.elapsedSeconds + 1 }));
+        const { activeTimer } = get();
+        if (activeTimer) {
+          const currentTime = Math.floor(Date.now() / 1000);
+          set({ elapsedSeconds: currentTime - activeTimer.started_at });
+        }
       }, 1000);
 
       set({
@@ -98,6 +107,32 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
         activeTimer: newTimer,
         elapsedSeconds: 0,
         timerInterval: id,
+      });
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  unfocusTask: async (projectId: string) => {
+    const { activeTimer, focusTask, timerInterval } = get();
+
+    try {
+      if (activeTimer && focusTask) {
+        await api.stopTimer(focusTask.id);
+      }
+
+      if (timerInterval) {
+        clearInterval(timerInterval);
+      }
+
+      await api.clearFocusTask(projectId);
+
+      set({
+        focusTask: null,
+        activeTimer: null,
+        elapsedSeconds: 0,
+        totalTimeSeconds: 0,
+        timerInterval: null,
       });
     } catch (e) {
       set({ error: String(e) });
@@ -139,7 +174,11 @@ export const useFocusStore = create<FocusStore>((set, get) => ({
       }
 
       const id = window.setInterval(() => {
-        set((state) => ({ elapsedSeconds: state.elapsedSeconds + 1 }));
+        const { activeTimer } = get();
+        if (activeTimer) {
+          const currentTime = Math.floor(Date.now() / 1000);
+          set({ elapsedSeconds: currentTime - activeTimer.started_at });
+        }
       }, 1000);
 
       set({

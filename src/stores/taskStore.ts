@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Track, Task, TaskDependency } from "@/types";
 import * as api from "@/lib/api";
+import { withErrorHandling } from "@/lib/utils";
 
 interface TaskStore {
   tracks: Track[];
@@ -11,9 +12,11 @@ interface TaskStore {
   createTrack: (name: string, currentProjectId: string) => Promise<boolean>;
   deleteTrack: (id: string, currentProjectId: string) => Promise<boolean>;
   reorderTracks: (trackId: string, newPosition: number, currentProjectId: string) => Promise<boolean>;
+  updateTrackName: (trackId: string, name: string, currentProjectId: string) => Promise<boolean>;
   createTask: (trackId: string, title: string, parentTaskId: string | null, currentProjectId: string) => Promise<boolean>;
   updateTaskStatus: (taskId: string, newStatus: Task["status"], currentProjectId: string) => Promise<void>;
   updateTaskDescription: (taskId: string, description: string | null, currentProjectId: string) => Promise<void>;
+  updateTaskTitle: (taskId: string, title: string, currentProjectId: string) => Promise<void>;
   deleteTask: (taskId: string, currentProjectId: string) => Promise<void>;
   reorderTasks: (taskId: string, newPosition: number, currentProjectId: string) => Promise<boolean>;
   addDependency: (taskId: string, blocksTaskId: string, currentProjectId: string) => Promise<void>;
@@ -49,7 +52,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   loadData: async (currentProjectId: string) => {
     if (!currentProjectId) return;
 
-    try {
+    await withErrorHandling(set, async () => {
       const [tracksData, allTasks, allDependencies] = await Promise.all([
         api.getTracks(currentProjectId),
         api.getTasks(null),
@@ -70,9 +73,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         dependencies: dependenciesData,
         error: null,
       });
-    } catch (e) {
-      set({ error: String(e) });
-    }
+    });
   },
 
   createTrack: async (name: string, currentProjectId: string) => {
@@ -82,7 +83,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     const hasMain = tracks.some((t) => t.type === "main");
     const trackType = hasMain ? "side" : "main";
 
-    try {
+    const result = await withErrorHandling(set, async () => {
       await api.createTrack({
         project_id: currentProjectId,
         name,
@@ -92,10 +93,9 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
       await get().loadData(currentProjectId);
       return true;
-    } catch (e) {
-      set({ error: String(e) });
-      return false;
-    }
+    });
+
+    return result ?? false;
   },
 
   deleteTrack: async (id: string, currentProjectId: string) => {
@@ -114,6 +114,22 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
     try {
       await api.reorderTracks(currentProjectId, trackId, newPosition);
+      await get().loadData(currentProjectId);
+      return true;
+    } catch (e) {
+      set({ error: String(e) });
+      return false;
+    }
+  },
+
+  updateTrackName: async (trackId: string, name: string, currentProjectId: string) => {
+    if (!name.trim()) return false;
+
+    try {
+      const track = get().tracks.find(t => t.id === trackId);
+      if (!track) return false;
+
+      await api.updateTrack(trackId, name.trim(), track.color);
       await get().loadData(currentProjectId);
       return true;
     } catch (e) {
@@ -154,6 +170,17 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   updateTaskDescription: async (taskId: string, description: string | null, currentProjectId: string) => {
     try {
       await api.updateTask(taskId, { description });
+      await get().loadData(currentProjectId);
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  updateTaskTitle: async (taskId: string, title: string, currentProjectId: string) => {
+    if (!title.trim()) return;
+
+    try {
+      await api.updateTask(taskId, { title: title.trim() });
       await get().loadData(currentProjectId);
     } catch (e) {
       set({ error: String(e) });
